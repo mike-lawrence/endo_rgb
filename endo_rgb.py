@@ -49,7 +49,6 @@ if __name__ == '__main__':
 	feedbackSizeInDegrees = 1
 
 	arrowSizeInDegrees = 1
-	targetSizeInDegrees = 1
 	offsetSizeInDegrees = 3
 	targetSizeInDegrees = 1
 	ringSizeInDegrees = 3
