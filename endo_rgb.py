@@ -53,6 +53,7 @@ if __name__ == '__main__':
 	targetSizeInDegrees = 1
 	ringSizeInDegrees = 3
 	ringThicknessProportion = .8
+	pickerSizeInDegrees = .5
 
 	textWidth = .9 #specify the proportion of the stimDisplay to use when drawing instructions
 
@@ -67,7 +68,7 @@ if __name__ == '__main__':
 	from PIL import Image #for image manipulation
 	from PIL import ImageFont
 	from PIL import ImageOps
-	#import aggdraw #for drawing
+	import aggdraw #for drawing
 	import math #for rounding
 	import sys #for quitting
 	import os
@@ -119,6 +120,7 @@ if __name__ == '__main__':
 	offsetSize = int(offsetSizeInDegrees*PPD)
 	ringSize = int(ringSizeInDegrees*PPD)
 	ringThickness = int(ringSizeInDegrees*PPD*ringThicknessProportion)
+	pickerSize = int(pickerSizeInDegrees*PPD)
 
 
 	########
@@ -197,6 +199,9 @@ if __name__ == '__main__':
 	class stimDisplayClass:
 		def __init__(self):
 			sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
+			self.lastUpdate = None #for keeping track of when the screen last updated
+			self.dt = None #for keeping track of the time between updates
+			return None
 		def show(self,stimDisplayRes,stimDisplayPosition):
 			self.Window = sdl2.ext.Window("Experiment", size=stimDisplayRes,position=stimDisplayPosition,flags=sdl2.SDL_WINDOW_OPENGL|sdl2.SDL_WINDOW_SHOWN| sdl2.SDL_WINDOW_FULLSCREEN_DESKTOP |sdl2.SDL_RENDERER_ACCELERATED | sdl2.SDL_RENDERER_PRESENTVSYNC)
 			self.glContext = sdl2.SDL_GL_CreateContext(stimDisplay.Window.window)
@@ -205,10 +210,21 @@ if __name__ == '__main__':
 			gl.glOrtho(0, stimDisplayRes[0],stimDisplayRes[1], 0, 0, 1)
 			gl.glMatrixMode(gl.GL_MODELVIEW)
 			gl.glDisable(gl.GL_DEPTH_TEST)
+			#gl.glClearColor(0,0,0,1)
+			#gl.glClear(gl.GL_COLOR_BUFFER_BIT)			
+			return None
 		def refresh(self):
 			sdl2.SDL_GL_SwapWindow(self.Window.window)
+			now = time.time()
+			if self.lastUpdate!=None:
+				self.dt = now-self.lastUpdate
+			self.lastUpdate = time.time()
+			#gl.glClearColor(0,0,0,1)
+			#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+			return None
 		def hide():
 			sdl2.SDL_DestroyWindow(self.Window.window)
+			return None
 
 
 	stimDisplay = stimDisplayClass()
@@ -354,32 +370,104 @@ if __name__ == '__main__':
 	def drawFeedback(feedbackText):
 		feedbackArray = text2numpy(feedbackText,feedbackFont,fg=[127,127,127,255],bg=[0,0,0,0])
 		blitNumpy(feedbackArray,stimDisplayRes[0]/2,stimDisplayRes[1]/2,xCentered=True,yCentered=True)
+		return None
 
-
-	# def drawFixationStim(x,y,radius):
-	# 	thisDegree = 0
-	# 	for i in range(12):
-	# 		thisDegree = i*30
-	# 		if i%2==1:
-	# 			gl.glColor3f(1,1,1)
-	# 		else:
-	# 			gl.glColor3f(0,0,0)
-	# 		gl.glBegin(gl.GL_POLYGON)
-	# 		gl.glVertex2f(x,y)
-	# 		for j in range(30):
-	# 			thisDegree = thisDegree+1
-	# 			gl.glVertex2f( x + math.sin(thisDegree*math.pi/180)*radius , y + math.cos(thisDegree*math.pi/180)*radius )
-	# 		gl.glEnd()
 
 	def drawArrow(direction):
+		start = time.time()
 		if direction=='left':
-
+			directionMultiplier = 1
 		else:
+			directionMultiplier = -1
+		gl.glColor3ub(127,127,127)
+		gl.glBegin(gl.GL_POLYGON)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5*4)*directionMultiplier , stimDisplayRes[1]/2 )
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/4)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/10)
+		gl.glVertex2f( stimDisplayRes[0]/2 + (arrowSize/5*4)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/10)
+		gl.glVertex2f( stimDisplayRes[0]/2 + (arrowSize/5*4)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/10)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/10)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/4)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5*4)*directionMultiplier , stimDisplayRes[1]/2 )
+		gl.glEnd()
+		gl.glColor3ub(0,0,0)
+		gl.glBegin(gl.GL_POLYGON)
+		gl.glVertex2f( stimDisplayRes[0]/2 - 1 , stimDisplayRes[1]/2 - 1)
+		gl.glVertex2f( stimDisplayRes[0]/2 + 1 , stimDisplayRes[1]/2 - 1)
+		gl.glVertex2f( stimDisplayRes[0]/2 + 1 , stimDisplayRes[1]/2 + 1)
+		gl.glVertex2f( stimDisplayRes[0]/2 - 1 , stimDisplayRes[1]/2 + 1)
+		gl.glVertex2f( stimDisplayRes[0]/2 - 1 , stimDisplayRes[1]/2 - 1)
+		gl.glEnd()
+		#print 'Arrow: '+str(int((time.time()-start)*1000))
+		return None
 
+
+	def drawPicker(xOffset,yOffset):
+		underColor = numpy.fromstring(gl.glReadPixels(stimDisplayRes[0]/2+xOffset,stimDisplayRes[1]/2+yOffset,1,1,gl.GL_RGB,gl.GL_UNSIGNED_BYTE),dtype=numpy.uint8)
+		pickerDraw = aggdraw.Draw('RGBA',[pickerSize*3,pickerSize*3],(0,0,0,0))
+		pickerDraw.ellipse((pickerSize,pickerSize,pickerSize*2,pickerSize*2),aggdraw.Brush((127,127,127,255)))
+		pickerDraw.ellipse((pickerSize+int(pickerSize/4.0),pickerSize+int(pickerSize/4.0),pickerSize*2-int(pickerSize/4.0),pickerSize*2-int(pickerSize/4.0)),aggdraw.Brush((underColor[0],underColor[1],underColor[2],255)))
+		pickerDraw.flush()
+		pickerString = pickerDraw.tostring()
+		pickerPil = Image.fromstring('RGBA',[pickerSize*3,pickerSize*3],pickerString)
+		pickerArray = numpy.array(pickerPil,dtype=numpy.uint8)
+		blitNumpy(pickerArray,stimDisplayRes[0]/2+xOffset,stimDisplayRes[1]/2+yOffset)
+		return None
+
+
+	def drawWheel():
+		gl.glBegin(gl.GL_TRIANGLE_FAN)
+		gl.glColor3ub(0,0,0)
+		gl.glVertex2f( stimDisplayRes[0]/2 , stimDisplayRes[1]/2 ) #center vertex
+		rotation = random.choice(range(len(fullColorList)))
+		for i in range(len(fullColorList)+1):
+			index = (i+rotation) % len(fullColorList) #serves to implement a ring array with rotation
+			gl.glColor3ub(fullColorList[index][0],fullColorList[index][1],fullColorList[index][2])
+			gl.glVertex2f( stimDisplayRes[0]/2 + math.sin(i*(360.0/len(fullColorList))*math.pi/180)*wheelSize , stimDisplayRes[1]/2 + math.cos(i*(360.0/len(fullColorList))*math.pi/180)*wheelSize)
+		gl.glEnd()
+		gl.glBegin(gl.GL_TRIANGLE_FAN) #begin center black disk
+		gl.glColor3ub(0,0,0)#,1)
+		for i in range(len(fullColorList)+1):
+			gl.glVertex2f( stimDisplayRes[0]/2 + math.sin(i*(360.0/len(fullColorList))*math.pi/180)*wheelSize*.9 , stimDisplayRes[1]/2 + math.cos(i*(360.0/len(fullColorList))*math.pi/180)*wheelSize*.9)
+		gl.glEnd() #end center black disk
+		return rotation
+
+
+	def drawColorTarget(xOffset,targetColor):
+		start = time.time()
+		gl.glBegin(gl.GL_TRIANGLE_FAN)
+		gl.glColor3ub(targetColor[0],targetColor[1],targetColor[2])
+		gl.glVertex2f( stimDisplayRes[0]/2+xOffset , stimDisplayRes[1]/2 ) #center vertex
+		for i in range(len(fullColorList)+1):
+			index = i % len(fullColorList)
+			gl.glVertex2f( stimDisplayRes[0]/2+xOffset + math.sin(i*(360.0/len(fullColorList))*math.pi/180)*targetSize , stimDisplayRes[1]/2 + math.cos(i*(360.0/len(fullColorList))*math.pi/180)*targetSize)
+		gl.glEnd()
+		#print 'Color: '+str(int((time.time()-start)*1000))
+		return None
+
+
+	def drawMask(targetSide):
+		start = time.time()
+		if targetSide=='left':
+			xOffset = -offsetSize
+		else:
+			xOffset = offsetSize
+		randomizedColorList = random.sample(fullColorList,len(fullColorList))
+		for i in range(len(randomizedColorList)):
+			gl.glBegin(gl.GL_POLYGON)
+			index = i % len(randomizedColorList)
+			gl.glColor3ub(randomizedColorList[index][0],randomizedColorList[index][1],randomizedColorList[index][2])
+			gl.glVertex2f( stimDisplayRes[0]/2+xOffset , stimDisplayRes[1]/2 ) #center vertex
+			gl.glVertex2f( stimDisplayRes[0]/2+xOffset + math.sin(i*(360.0/len(randomizedColorList))*math.pi/180)*targetSize , stimDisplayRes[1]/2 + math.cos(i*(360.0/len(randomizedColorList))*math.pi/180)*targetSize)
+			gl.glVertex2f( stimDisplayRes[0]/2+xOffset + math.sin((i+1)*(360.0/len(randomizedColorList))*math.pi/180)*targetSize , stimDisplayRes[1]/2 + math.cos((i+1)*(360.0/len(randomizedColorList))*math.pi/180)*targetSize)
+			gl.glEnd()
+		#print 'Mask: '+str(int((time.time()-start)*1000))
+		return None
 
 	def drawRing(xOffset):
-		outer = ringSize
-		inner = ringSize*ringThicknessProportion
+		start = time.time()
+		outer = ringSize/2
+		inner = ringSize/2*ringThicknessProportion
 		gl.glColor3f(.5,.5,.5)
 		gl.glBegin(gl.GL_QUAD_STRIP)
 		for i in range(360):
@@ -388,15 +476,11 @@ if __name__ == '__main__':
 		gl.glVertex2f(stimDisplayRes[0]/2+xOffset + math.sin(360*math.pi/180)*outer,stimDisplayRes[1]/2 + math.cos(360*math.pi/180)*outer)
 		gl.glVertex2f(stimDisplayRes[0]/2+xOffset + math.sin(360*math.pi/180)*inner,stimDisplayRes[1]/2 + math.cos(360*math.pi/180)*inner)
 		gl.glEnd()
-
-
-	def drawFixation(arrowDirection):
-		drawArrow(arrowDirection)
-		drawRing(offsetSize)
-		drawRing(-offsetSize)
-
+		#print 'Ring: '+str(int((time.time()-start)*1000))
+		return None
 
 	def drawSquare(xOffset):
+		start = time.time()
 		outer = ringSize
 		inner = ringSize*ringThicknessProportion
 		gl.glColor3f(.5,.5,.5)
@@ -412,9 +496,12 @@ if __name__ == '__main__':
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset-outer/2 , stimDisplayRes[1]/2-outer/2 )
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset-inner/2 , stimDisplayRes[1]/2-inner/2 )
 		gl.glEnd()
+		#print 'Square: '+str(int((time.time()-start)*1000))
+		return None
 
 
 	def drawDiamond(xOffset):
+		start = time.time()
 		outer = ringSize
 		inner = ringSize*ringThicknessProportion
 		gl.glColor3f(.5,.5,.5)
@@ -433,39 +520,28 @@ if __name__ == '__main__':
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset-outer , yOffset )
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset-inner , yOffset )
 		gl.glEnd()
+		#print 'Diamond: '+str(int((time.time()-start)*1000))
+		return None
 
-	# def drawPartialCircle(pos=(0,0), radius=100):
-	#     with gx_begin(GL_TRIANGLE_FAN):
-	#         glColor3f(0,0,1)
-	#         glVertex2f(0,0)
-	#         for angle in range (90,185,5):
-	#             glColor3f(sin(radians(angle-90))*sqrt(2),cos(radians(angle-90))*sqrt(2),0)
-	#             glVertex2f(int(cos(radians(angle))*radius),int(sin(radians(angle))*radius))
 
-	def drawDot(xOffset,targetColor):
-		gl.glBegin(gl.GL_TRIANGLE_FAN)
-		if targetColor!=None:
-			glColor3ub(targetColor[0],targetColor[1],targetColor[2])
-		else:
-			glColor3ub(0,0,0)
-		gl.glVertex2f( stimDisplayRes[0]/2+xOffset , stimDisplayRes[1]/2 ) #center vertex
-		colors = random.sample(fullColorList,len(fullColorList))
-		for i in range(len(colors)):
-			if targetColor==None:
-				gl.glColor3ub(colors[i][0],colors[i][1],colors[i][2])
-			gl.glVertex2f( stimDisplayRes[0]/2+xOffset + math.sin(i*math.pi/180)*size , stimDisplayRes[1]/2 + math.cos(i*math.pi/180)*size)
-		gl.glEnd()
-
-	def drawTarget(targetSide,targetIdentity,targetColor):
+	def drawTargets(targetSide,targetIdentity,targetColor):
 		if targetSide=='left':
 			xOffset = -offsetSize
 		else:
-			xOffset = -offsetSize
+			xOffset = offsetSize
+		drawRing(-xOffset)
 		if targetIdentity=='square':
 			drawSquare(xOffset)
 		else:
 			drawDiamond(xOffset)
-		drawDot(xOffset,targetColor)
+		drawColorTarget(xOffset,targetColor)
+		return None
+
+	def drawFixation(arrowDirection):
+		drawArrow(arrowDirection)
+		drawRing(offsetSize)
+		drawRing(-offsetSize)
+		return None
 
 
 
@@ -514,20 +590,20 @@ if __name__ == '__main__':
 	#define a function that prints a message on the stimDisplay while looking for user input to continue. The function returns the total time it waited
 	def showMessage(myText):
 		messageViewingTimeStart = getTime()
-		gl.glClearColor(0,0,0,1)
-		gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+		#gl.glClearColor(0,0,0,1)
+		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		stimDisplay.refresh()
-		gl.glClearColor(0,0,0,1)
-		gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+		#gl.glClearColor(0,0,0,1)
+		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		drawText( myText , instructionFont , stimDisplayRes[0] , xLoc=stimDisplayRes[0]/2 , yLoc=stimDisplayRes[1]/2 , fg=[200,200,200,255] )
 		simpleWait(0.500)
 		stimDisplay.refresh()
-		gl.glClearColor(0,0,0,1)
-		gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+		#gl.glClearColor(0,0,0,1)
+		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		waitForResponse()
 		stimDisplay.refresh()
-		gl.glClearColor(0,0,0,1)
-		gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+		#gl.glClearColor(0,0,0,1)
+		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		simpleWait(0.500)
 		messageViewingTime = getTime() - messageViewingTimeStart
 		return messageViewingTime
@@ -537,17 +613,17 @@ if __name__ == '__main__':
 	def getInput(getWhat):
 		getWhat = getWhat
 		textInput = ''
-		gl.glClearColor(0,0,0,1)
-		gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+		#gl.glClearColor(0,0,0,1)
+		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		stimDisplay.refresh()
 		simpleWait(0.500)
 		myText = getWhat+textInput
-		gl.glClearColor(0,0,0,1)
-		gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+		#gl.glClearColor(0,0,0,1)
+		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		drawText( myText , instructionFont , stimDisplayRes[0] , xLoc=stimDisplayRes[0]/2 , yLoc=stimDisplayRes[1]/2 , fg=[200,200,200,255] )
 		stimDisplay.refresh()
-		gl.glClearColor(0,0,0,1)
-		gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+		#gl.glClearColor(0,0,0,1)
+		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		done = False
 		while not done:
 			if not stamperChild.qFrom.empty():
@@ -560,8 +636,8 @@ if __name__ == '__main__':
 						if textInput!='':
 							textInput = textInput[0:(len(textInput)-1)]
 							myText = getWhat+textInput
-							gl.glClearColor(0,0,0,1)
-							gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+							#gl.glClearColor(0,0,0,1)
+							#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 							drawText( myText , instructionFont , stimDisplayRes[0] , xLoc=stimDisplayRes[0]/2 , yLoc=stimDisplayRes[1]/2 , fg=[200,200,200,255] )
 							stimDisplay.refresh()
 					elif response == 'return':
@@ -569,12 +645,12 @@ if __name__ == '__main__':
 					else:
 						textInput = textInput + response
 						myText = getWhat+textInput
-						gl.glClearColor(0,0,0,1)
-						gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+						#gl.glClearColor(0,0,0,1)
+						#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 						drawText( myText , instructionFont , stimDisplayRes[0] , xLoc=stimDisplayRes[0]/2 , yLoc=stimDisplayRes[1]/2 , fg=[200,200,200,255] )
 						stimDisplay.refresh()
-		gl.glClearColor(0,0,0,1)
-		gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+		#gl.glClearColor(0,0,0,1)
+		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		stimDisplay.refresh()
 		return textInput
 
@@ -612,6 +688,27 @@ if __name__ == '__main__':
 						trials.append([cueValidity,targetSide,targetIdentity,targetColor])
 		random.shuffle(trials)
 		return trials
+
+
+	def waitAndWatch(timeoutTime,triggerData=None):
+		if triggerData==None:
+			triggerData = [[],[]]
+			lastLeftTrigger = -(2**16/2)
+			lastRightTrigger = -(2**16/2)
+		else:
+			if len(triggerData[0])<1:
+				lastLeftTrigger = -(2**16/2)
+			else:
+				lastLeftTrigger = triggerData[0][-1][-1]
+			if len(triggerData[1])<1:
+				lastRightTrigger = -(2**16/2)
+			else:
+				lastRightTrigger = triggerData[1][-1][-1]
+		while time.time()<timeoutTime:
+			responseMade,rts,triggerData = checkInput(triggerData)
+			if responseMade:
+				break
+		return [responseMade,rts,triggerData]
 
 
 	def checkInput(triggerData=None):
@@ -726,73 +823,74 @@ if __name__ == '__main__':
 			responseTimeoutTime = targetOnTime + responseTimeout
 
 			#prepare the target screen
-			drawFixation(arrowDirection)
-			drawTarget(targetSide,targetIdentity)
+			drawArrow(arrowDirection)
+			drawTargets(targetSide,targetIdentity,targetColor)
 
-			waitAndWatch(targetOnTime)
+			responseMade,rts,triggerData = waitAndWatch(timeoutTime=targetOnTime)
 
-			#show the target for 100ms
-			stimDisplay.refresh()
-			for i in range(5): #plus the first frame yields 100ms
-				drawFixation(arrowDirection)
-				drawTarget(targetSide,targetIdentity)
-				stimDisplay.refresh()
-
-			#show the mask for 100ms
-			for i in range(6): #6 frame yields 100ms
-				drawFixation(arrowDirection)
-				drawMask(targetSide)
-				stimDisplay.refresh()
-
-			#show the fixation screen until response
-			drawFixation(arrowDirection)
-			stimDisplay.refresh()
-
-			waitAndWatch(targetOnTime)
-
-			#trial done, process input
-			responseMade,rts,triggerData = checkInput()
-
-			#compute feedback
-			if targetIdentity=='square':
-				if not responseMade:
-					feedbackText = 'Miss!'
-					print 'miss'
-				else:
-					if (len(rts[0])==0) or (len(rts[1])==0):
-						notDouble = 'TRUE'
-						feedbackText = 'Use both!'
-						print 'only one trigger pressed'
-					else:
-						rt = (rts[0][0]+rts[1][0])/2.0-targetOnTime
-						if rt<0:
-							preTargetResponse = 'TRUE'
-							feedbackText = 'Too soon!'
-							print 'anticipation'
-						else:
-							feedbackText = str(int(rt*10)) #tenths of seconds
-							print feedbackText
+			if responseMade:
+				#cut the trial short if anticipation is made
+				preTargetResponse = 'TRUE'
+				feedbackText = 'Too soon!'
+				print 'anticipation'
 			else:
-				if responseMade:
-					if (len(rts[0])==0) or (len(rts[1])==0):
-						notDouble = 'TRUE'
-						feedbackText = 'Use both!'
-						print 'only one trigger pressed'
+				stimDisplay.refresh() #show the target
+				for i in range(5): #plus the first frame yields 6 frames = 100ms
+					drawArrow(arrowDirection)
+					drawTarget(targetSide,targetIdentity,targetColor)
+					stimDisplay.refresh()
+
+				#show the mask for 100ms
+				for i in range(6): #6 frame yields 100ms
+					drawFixation(arrowDirection)
+					drawMask(targetSide)
+					stimDisplay.refresh()
+
+				#show the fixation screen until response
+				drawFixation(arrowDirection)
+				stimDisplay.refresh()
+
+				#wait for response, if any
+				responseMade,rts,triggerData = waitAndWatch(timeoutTime=responseTimeoutTime,triggerData=triggerData)
+
+				#compute feedback
+				if targetIdentity=='square':
+					if not responseMade:
+						feedbackText = 'Miss!'
+						print 'miss'
 					else:
-						rt = (rts[0][0]+rts[1][0])/2.0-targetOnTime
-						if rt<0:
-							preTargetResponse = 'TRUE'
-							feedbackText = 'Too soon!'
-							print 'anticipation'
+						if (len(rts[0])==0) or (len(rts[1])==0):
+							notDouble = 'TRUE'
+							feedbackText = 'Use both!'
+							print 'only one trigger pressed'
 						else:
-							feedbackText = 'Oops!'
-							print 'false alarm'
+							rt = (rts[0][0]+rts[1][0])/2.0-targetOnTime
+							if rt<0:
+								preTargetResponse = 'TRUE'
+								feedbackText = 'Too soon!'
+								print 'anticipation'
+							else:
+								feedbackText = str(int(rt*10)) #tenths of seconds
+								print feedbackText
 				else:
-					feedbackText = 'Good'
-					print 'nogo'
+					if responseMade:
+						if (len(rts[0])==0) or (len(rts[1])==0):
+							notDouble = 'TRUE'
+							feedbackText = 'Use both!'
+							print 'only one trigger pressed'
+						else:
+							rt = (rts[0][0]+rts[1][0])/2.0-targetOnTime
+							if rt<0:
+								preTargetResponse = 'TRUE'
+								feedbackText = 'Too soon!'
+								print 'anticipation'
+							else:
+								feedbackText = 'Oops!'
+								print 'false alarm'
+					else:
+						feedbackText = 'Good'
+						print 'nogo'
 			#show feedback
-			gl.glClearColor(0,0,0,1)
-			gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 			drawFeedback(feedbackText)
 			stimDisplay.refresh()
 			trialDoneTime = getTime()
@@ -807,6 +905,19 @@ if __name__ == '__main__':
 			if responseMade2:
 				feedbackResponse = 'TRUE'
 				print 'feedback response made'
+			#Do color wheel here
+			wheelRotation = drawWheel()
+			drawPicker(0,0)
+			while not done:
+				#check for input
+				while not stamperChild.qFrom.empty():
+					event = stamperChild.qFrom.get()
+					if event['type'] == 'key' :
+						if event['value']=='escape':
+							exitSafely()
+					if event['type'] == 'axis':
+						if event['axis']==triggerLeftAxis:
+
 			#write out trial info
 			triggerData = [[[i[0]-targetOnTime,i[1]] for i in side] for side in triggerData]#fix times to be relative to target on time
 			triggerDataToWriteLeft = '\n'.join([trialDescrptor + '\tleft\t' + '\t'.join(map(str,i)) for i in triggerData[0]])
