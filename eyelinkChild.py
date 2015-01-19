@@ -28,6 +28,9 @@ qTo
 	except:
 		pass
 
+	fontSize = 20
+	sdl2.sdlttf.TTF_Init()
+	font = sdl2.sdlttf.TTF_OpenFont('./_Stimuli/DejaVuSans.ttf', fontSize)
 
 	sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
 	window = sdl2.ext.Window("eyelink",size=windowSize,position=windowPosition,flags=sdl2.SDL_WINDOW_SHOWN)
@@ -91,9 +94,9 @@ qTo
 			self.updateSurf()
 		def updateSurf(self):
 			if self.isActive:
-				self.surf = sdl2.sdlttf.TTF_RenderText_Blended_Wrapped(font,self.text+self.valueText,sdl2.pixels.SDL_Color(r=0, g=255, b=255, a=255),previewWindow.size[0]).contents
+				self.surf = sdl2.sdlttf.TTF_RenderText_Blended_Wrapped(font,self.text+self.valueText,sdl2.pixels.SDL_Color(r=0, g=255, b=255, a=255),window.size[0]).contents
 			else:
-				self.surf = sdl2.sdlttf.TTF_RenderText_Blended_Wrapped(font,self.text+self.valueText,sdl2.pixels.SDL_Color(r=0, g=0, b=255, a=255),previewWindow.size[0]).contents
+				self.surf = sdl2.sdlttf.TTF_RenderText_Blended_Wrapped(font,self.text+self.valueText,sdl2.pixels.SDL_Color(r=0, g=0, b=255, a=255),window.size[0]).contents
 		def checkIfActive(self,event):
 			if self.rightJustified:
 				xLeft = self.x - self.surf.w
@@ -151,7 +154,7 @@ qTo
 
 	#send the initial settings
 	for setting in settingsDict:
-		sendCommand("saccade_"+setting+"_threshold =%d"%(settingsDict[setting].value))
+		eyelink.sendCommand("saccade_"+setting+"_threshold =%d"%(settingsDict[setting].value))
 
 
 	class EyeLinkCoreGraphicsPySDL2(pylink.EyeLinkCustomDisplay):
@@ -197,16 +200,16 @@ qTo
 			sdl2.SDL_PumpEvents()
 			return None
 		def get_input_key(self):
-			tracker_mode = self.tracker.getTrackerMode()
+			# tracker_mode = self.tracker.getTrackerMode()
 			sdl2.SDL_PumpEvents()
 			for event in sdl2.ext.get_events():
 				if event.type == sdl2.SDL_KEYDOWN:
 					keysym = event.key.keysym
-					if keysym.sym == sdl2.SDLK_ESCAPE:  # don't allow escape to control tracker unless calibrating
-						if tracker_mode in [pylink.EL_VALIDATE_MODE, pylink.EL_CALIBRATE_MODE]:
-							return [pylink.KeyInput(sdl2.SDLK_ESCAPE, 0)]
-						else:
-							return False
+					# if keysym.sym == sdl2.SDLK_ESCAPE:  # don't allow escape to control tracker unless calibrating
+					# 	if tracker_mode in [pylink.EL_VALIDATE_MODE, pylink.EL_CALIBRATE_MODE]:
+					# 		return [pylink.KeyInput(sdl2.SDLK_ESCAPE, 0)]
+					# 	else:
+					# 		return False
 					return [pylink.KeyInput(keysym.sym, keysym.mod)]
 			return None
 
@@ -247,7 +250,7 @@ qTo
 					for setting in settingsDict:
 						if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
 							settingsDict[setting].finalizeValue()
-							sendCommand("saccade_"+setting+"_threshold =%d"%(settingsDict[setting].value))
+							eyelink.sendCommand("saccade_"+setting+"_threshold =%d"%(settingsDict[setting].value))
 							settingsDict[setting].clicked = False
 				else:
 					for setting in settingsDict:

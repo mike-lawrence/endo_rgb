@@ -1,12 +1,29 @@
 if __name__ == '__main__':
+
+	########
+	# Generate RGB color list
+	########
+	fullColorList = []
+	for i in range(256):
+		fullColorList.append([255-i,i,0])
+
+	for i in range(256):
+		if i>0:
+			fullColorList.append([0,255-i,0+i])
+
+	for i in range(256):
+		if i>0:
+			if i<255:
+				fullColorList.append([0+i,0,255-i])
+
 	########
 	#Important parameters
 	########
 
 	viewingDistance = 57.0 #units can be anything so long as they match those used in stimDisplayWidth below
 	stimDisplayWidth = 54.5 #units can be anything so long as they match those used in viewingDistance above
-	stimDisplayRes = (1920,1080) #pixel resolution of the stimDisplay
-	stimDisplayPosition = (2560,0)
+	stimDisplayRes = (1920,1080)
+	stimDisplayPosition=(0-1440-1080,0)
 
 	writerWindowSize = (200,200)
 	writerWindowPosition = (300,0)
@@ -32,18 +49,21 @@ if __name__ == '__main__':
 	triggerCriterionValue = -(2**16/4) #16 bit precision on the triggers, split criterion @a 25%
 	horizontalAxisLeft = 0
 	verticalAxisLeft = 1
-	horizontalAxisLeft = 3
+	horizontalAxisRight = 3
 	verticalAxisRight = 4
 
 
 	cueValidityList = ['valid','valid','invalid']
 	targetSideList = ['left','right']
 	targetIdentityList = ['square','diamond']
-	colorList = [] 
+	targetColorList = []
+	for i in range(9):
+		index = (len(fullColorList)/9.0)*i+(len(fullColorList)/9.0/2.0)
+		targetColorList.append(fullColorList[int(index)])
 
 
 	#times are specified in seconds
-	cueTargetSOA = 1.000
+	cueTargetSOA = 2.000
 	responseTimeout = 1.000
 	feedbackDuration = 1.000
 
@@ -53,12 +73,13 @@ if __name__ == '__main__':
 	instructionSizeInDegrees = 1 
 	feedbackSizeInDegrees = 1
 
-	arrowSizeInDegrees = 1
-	offsetSizeInDegrees = 3
-	targetSizeInDegrees = 1
-	ringSizeInDegrees = 3
+	arrowSizeInDegrees = 2
+	offsetSizeInDegrees = 10
+	targetSizeInDegrees = 5
+	ringSizeInDegrees = 8
 	ringThicknessProportion = .8
-	pickerSizeInDegrees = .5
+	pickerSizeInDegrees = 1
+	wheelSizeInDegrees = 10
 
 	textWidth = .9 #specify the proportion of the stimDisplay to use when drawing instructions
 
@@ -126,6 +147,7 @@ if __name__ == '__main__':
 	ringSize = int(ringSizeInDegrees*PPD)
 	ringThickness = int(ringSizeInDegrees*PPD*ringThicknessProportion)
 	pickerSize = int(pickerSizeInDegrees*PPD)
+	wheelSize = int(wheelSizeInDegrees*PPD)
 
 
 	########
@@ -180,8 +202,8 @@ if __name__ == '__main__':
 		eyelinkChild = fileForker.childClass(childFile='eyelinkChild.py')
 		eyelinkChild.initDict['windowSize'] = eyelinkWindowSize
 		eyelinkChild.initDict['windowPosition'] = eyelinkWindowPosition
-		eyelinkChild.initDict['calibrationDisplayPosition'] = [ stimDisplayPosition[0] + stimDisplayRes[0]/2 - offsetSize , stimDisplayPosition[1] + stimDisplayRes[1]/2 - offsetSize/2 ]
-		eyelinkChild.initDict['calibrationDisplayRes'] = [offsetSize*2,offsetSize]
+		eyelinkChild.initDict['calibrationDisplayPosition'] = (0-1440-1080,0)
+		eyelinkChild.initDict['calibrationDisplayRes'] = (1920,1080)
 		eyelinkChild.initDict['calibrationDotSize'] = calibrationDotSize
 		eyelinkChild.initDict['eyelinkIP'] = eyelinkIP
 		eyelinkChild.initDict['edfFileName'] = edfFileName
@@ -215,17 +237,17 @@ if __name__ == '__main__':
 			gl.glOrtho(0, stimDisplayRes[0],stimDisplayRes[1], 0, 0, 1)
 			gl.glMatrixMode(gl.GL_MODELVIEW)
 			gl.glDisable(gl.GL_DEPTH_TEST)
-			#gl.glClearColor(0,0,0,1)
-			#gl.glClear(gl.GL_COLOR_BUFFER_BIT)			
+			gl.glClearColor(0,0,0,1)
+			gl.glClear(gl.GL_COLOR_BUFFER_BIT)			
 			return None
 		def refresh(self):
 			sdl2.SDL_GL_SwapWindow(self.Window.window)
-			now = time.time()
+			now = getTime()
 			if self.lastUpdate!=None:
 				self.dt = now-self.lastUpdate
-			self.lastUpdate = time.time()
-			#gl.glClearColor(0,0,0,1)
-			#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+			self.lastUpdate = getTime()
+			gl.glClearColor(0,0,0,1)
+			gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 			return None
 		def hide():
 			sdl2.SDL_DestroyWindow(self.Window.window)
@@ -239,21 +261,6 @@ if __name__ == '__main__':
 		sdl2.SDL_PumpEvents() #to show the windows
 
 
-	########
-	# Generate RGB color list
-	########
-	fullColorList = []
-	for i in range(256):
-		fullColorList.append([255-i,i,0])
-
-	for i in range(256):
-		if i>0:
-			fullColorList.append([0,255-i,0+i])
-
-	for i in range(256):
-		if i>0:
-			if i<255:
-				fullColorList.append([0+i,0,255-i])
 
 
 
@@ -379,7 +386,7 @@ if __name__ == '__main__':
 
 
 	def drawArrow(direction):
-		start = time.time()
+		start = getTime()
 		if direction=='left':
 			directionMultiplier = 1
 		else:
@@ -403,12 +410,12 @@ if __name__ == '__main__':
 		gl.glVertex2f( stimDisplayRes[0]/2 - 1 , stimDisplayRes[1]/2 + 1)
 		gl.glVertex2f( stimDisplayRes[0]/2 - 1 , stimDisplayRes[1]/2 - 1)
 		gl.glEnd()
-		#print 'Arrow: '+str(int((time.time()-start)*1000))
+		#print 'Arrow: '+str(int((getTime()-start)*1000))
 		return None
 
 
 	def drawPicker(xOffset,yOffset):
-		underColor = numpy.fromstring(gl.glReadPixels(stimDisplayRes[0]/2+xOffset,stimDisplayRes[1]/2+yOffset,1,1,gl.GL_RGB,gl.GL_UNSIGNED_BYTE),dtype=numpy.uint8)
+		underColor = numpy.fromstring(gl.glReadPixels(stimDisplayRes[0]/2+xOffset,stimDisplayRes[1]/2-yOffset,1,1,gl.GL_RGB,gl.GL_UNSIGNED_BYTE),dtype=numpy.uint8)
 		pickerDraw = aggdraw.Draw('RGBA',[pickerSize*3,pickerSize*3],(0,0,0,0))
 		pickerDraw.ellipse((pickerSize,pickerSize,pickerSize*2,pickerSize*2),aggdraw.Brush((127,127,127,255)))
 		pickerDraw.ellipse((pickerSize+int(pickerSize/4.0),pickerSize+int(pickerSize/4.0),pickerSize*2-int(pickerSize/4.0),pickerSize*2-int(pickerSize/4.0)),aggdraw.Brush((underColor[0],underColor[1],underColor[2],255)))
@@ -440,7 +447,7 @@ if __name__ == '__main__':
 
 
 	def drawColorTarget(xOffset,targetColor):
-		start = time.time()
+		start = getTime()
 		gl.glBegin(gl.GL_TRIANGLE_FAN)
 		gl.glColor3ub(targetColor[0],targetColor[1],targetColor[2])
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset , stimDisplayRes[1]/2 ) #center vertex
@@ -448,12 +455,12 @@ if __name__ == '__main__':
 			index = i % len(fullColorList)
 			gl.glVertex2f( stimDisplayRes[0]/2+xOffset + math.sin(i*(360.0/len(fullColorList))*math.pi/180)*targetSize , stimDisplayRes[1]/2 + math.cos(i*(360.0/len(fullColorList))*math.pi/180)*targetSize)
 		gl.glEnd()
-		#print 'Color: '+str(int((time.time()-start)*1000))
+		#print 'Color: '+str(int((getTime()-start)*1000))
 		return None
 
 
 	def drawMask(targetSide):
-		start = time.time()
+		start = getTime()
 		if targetSide=='left':
 			xOffset = -offsetSize
 		else:
@@ -467,11 +474,11 @@ if __name__ == '__main__':
 			gl.glVertex2f( stimDisplayRes[0]/2+xOffset + math.sin(i*(360.0/len(randomizedColorList))*math.pi/180)*targetSize , stimDisplayRes[1]/2 + math.cos(i*(360.0/len(randomizedColorList))*math.pi/180)*targetSize)
 			gl.glVertex2f( stimDisplayRes[0]/2+xOffset + math.sin((i+1)*(360.0/len(randomizedColorList))*math.pi/180)*targetSize , stimDisplayRes[1]/2 + math.cos((i+1)*(360.0/len(randomizedColorList))*math.pi/180)*targetSize)
 			gl.glEnd()
-		#print 'Mask: '+str(int((time.time()-start)*1000))
+		#print 'Mask: '+str(int((getTime()-start)*1000))
 		return None
 
 	def drawRing(xOffset):
-		start = time.time()
+		start = getTime()
 		outer = ringSize/2
 		inner = ringSize/2*ringThicknessProportion
 		gl.glColor3f(.5,.5,.5)
@@ -482,11 +489,11 @@ if __name__ == '__main__':
 		gl.glVertex2f(stimDisplayRes[0]/2+xOffset + math.sin(360*math.pi/180)*outer,stimDisplayRes[1]/2 + math.cos(360*math.pi/180)*outer)
 		gl.glVertex2f(stimDisplayRes[0]/2+xOffset + math.sin(360*math.pi/180)*inner,stimDisplayRes[1]/2 + math.cos(360*math.pi/180)*inner)
 		gl.glEnd()
-		#print 'Ring: '+str(int((time.time()-start)*1000))
+		#print 'Ring: '+str(int((getTime()-start)*1000))
 		return None
 
 	def drawSquare(xOffset):
-		start = time.time()
+		start = getTime()
 		outer = ringSize
 		inner = ringSize*ringThicknessProportion
 		gl.glColor3f(.5,.5,.5)
@@ -502,12 +509,12 @@ if __name__ == '__main__':
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset-outer/2 , stimDisplayRes[1]/2-outer/2 )
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset-inner/2 , stimDisplayRes[1]/2-inner/2 )
 		gl.glEnd()
-		#print 'Square: '+str(int((time.time()-start)*1000))
+		#print 'Square: '+str(int((getTime()-start)*1000))
 		return None
 
 
 	def drawDiamond(xOffset):
-		start = time.time()
+		start = getTime()
 		outer = ringSize
 		inner = ringSize*ringThicknessProportion
 		gl.glColor3f(.5,.5,.5)
@@ -526,7 +533,7 @@ if __name__ == '__main__':
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset-outer , yOffset )
 		gl.glVertex2f( stimDisplayRes[0]/2+xOffset-inner , yOffset )
 		gl.glEnd()
-		#print 'Diamond: '+str(int((time.time()-start)*1000))
+		#print 'Diamond: '+str(int((getTime()-start)*1000))
 		return None
 
 
@@ -697,6 +704,8 @@ if __name__ == '__main__':
 
 
 	def waitAndWatch(timeoutTime,triggerData=None):
+		responseMade = False
+		rts = []
 		if triggerData==None:
 			triggerData = [[],[]]
 			lastLeftTrigger = -(2**16/2)
@@ -710,7 +719,7 @@ if __name__ == '__main__':
 				lastRightTrigger = -(2**16/2)
 			else:
 				lastRightTrigger = triggerData[1][-1][-1]
-		while time.time()<timeoutTime:
+		while getTime()<timeoutTime:
 			responseMade,rts,triggerData = checkInput(triggerData)
 			if responseMade:
 				break
@@ -761,8 +770,8 @@ if __name__ == '__main__':
 	#define a function that runs a block of trials
 	def runBlock():
 
-		start = time.time()
-		while (time.time()-start)<1:
+		start = getTime()
+		while (getTime()-start)<1:
 			checkInput()
 		
 		print 'block started'
@@ -843,7 +852,7 @@ if __name__ == '__main__':
 				stimDisplay.refresh() #show the target
 				for i in range(5): #plus the first frame yields 6 frames = 100ms
 					drawArrow(arrowDirection)
-					drawTarget(targetSide,targetIdentity,targetColor)
+					drawTargets(targetSide,targetIdentity,targetColor)
 					stimDisplay.refresh()
 
 				#show the mask for 100ms
@@ -916,20 +925,23 @@ if __name__ == '__main__':
 			pickerX,pickerY = [0,0]
 			drawPicker(pickerX,pickerY)
 			stimDisplay.refresh()
+			pickerStart = getTime()
+			done = False
 			while not done:
 				#check for input
-				while (not stamperChild.qFrom.empty()) and ((time.time()-stimDisplay.lastUpdate)<.01):
+				while (not stamperChild.qFrom.empty()) and ((getTime()-stimDisplay.lastUpdate)<.01):
 					event = stamperChild.qFrom.get()
 					if event['type'] == 'key' :
 						if event['value']=='escape':
 							exitSafely()
 					elif event['type'] == 'axis':
-						moveSize = (event['value']/((2**16)/2.0))*pickerSize #value converted to proportion full then multiplied by pickersize
+						moveSize = (event['value']/((2**16)/2.0))*pickerSize/10.0 #value converted to proportion full then multiplied by pickersize
 						if (event['axis']==horizontalAxisLeft) or (event['axis']==horizontalAxisRight):
 							pickerX = pickerX + moveSize
 						elif (event['axis']==verticalAxisLeft) or (event['axis']==verticalAxisRight):
 							pickerY = pickerY + moveSize
-					elif event['type'] = 'button':
+					elif event['type'] == 'button':
+						pickerTime = getTime()-pickerStart
 						done = True
 				drawWheel(rotation=wheelRotation)
 				drawPicker(pickerX,pickerY)
@@ -941,7 +953,7 @@ if __name__ == '__main__':
 			triggerDataToWriteRight = '\n'.join([trialDescrptor + '\tright\t' + '\t'.join(map(str,i)) for i in triggerData[1]])
 			writerChild.qTo.put(['write','trigger',triggerDataToWriteLeft])
 			writerChild.qTo.put(['write','trigger',triggerDataToWriteRight])
-			dataToWrite = '\t'.join(map(str,[ subInfoForFile , messageViewingTime , block , trialNum , cueValidity , targetSide , targetIdentity , targetColor , rt , notDouble , preTargetResponse , feedbackResponse , wheelRotation , colorChoice , pickerX , pickerY ]))
+			dataToWrite = '\t'.join(map(str,[ subInfoForFile , messageViewingTime , block , trialNum , cueValidity , targetSide , targetIdentity , targetColor , rt , notDouble , preTargetResponse , feedbackResponse , wheelRotation , colorChoice , pickerX , pickerY , pickerTime ]))
 			writerChild.qTo.put(['write','data',dataToWrite])
 			if doEyelink:
 				if response=='p':
