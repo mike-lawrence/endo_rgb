@@ -29,7 +29,12 @@ if __name__ == '__main__':
 	responseModality = 'trigger' # 'key' or 'trigger'
 	triggerLeftAxis = 2
 	triggerRightAxis = 5
-	triggerCriterionValue = -(2**16/4) #16 bit precision on the triggers, split above/below 0
+	triggerCriterionValue = -(2**16/4) #16 bit precision on the triggers, split criterion @a 25%
+	horizontalAxisLeft = 0
+	verticalAxisLeft = 1
+	horizontalAxisLeft = 3
+	verticalAxisRight = 4
+
 
 	cueValidityList = ['valid','valid','invalid']
 	targetSideList = ['left','right']
@@ -415,11 +420,12 @@ if __name__ == '__main__':
 		return None
 
 
-	def drawWheel():
+	def drawWheel(rotation=None):
 		gl.glBegin(gl.GL_TRIANGLE_FAN)
 		gl.glColor3ub(0,0,0)
 		gl.glVertex2f( stimDisplayRes[0]/2 , stimDisplayRes[1]/2 ) #center vertex
-		rotation = random.choice(range(len(fullColorList)))
+		if rotation==None:
+			rotation = random.choice(range(len(fullColorList)))
 		for i in range(len(fullColorList)+1):
 			index = (i+rotation) % len(fullColorList) #serves to implement a ring array with rotation
 			gl.glColor3ub(fullColorList[index][0],fullColorList[index][1],fullColorList[index][2])
@@ -907,24 +913,35 @@ if __name__ == '__main__':
 				print 'feedback response made'
 			#Do color wheel here
 			wheelRotation = drawWheel()
-			drawPicker(0,0)
+			pickerX,pickerY = [0,0]
+			drawPicker(pickerX,pickerY)
+			stimDisplay.refresh()
 			while not done:
 				#check for input
-				while not stamperChild.qFrom.empty():
+				while (not stamperChild.qFrom.empty()) and ((time.time()-stimDisplay.lastUpdate)<.01):
 					event = stamperChild.qFrom.get()
 					if event['type'] == 'key' :
 						if event['value']=='escape':
 							exitSafely()
-					if event['type'] == 'axis':
-						if event['axis']==triggerLeftAxis:
-
+					elif event['type'] == 'axis':
+						moveSize = (event['value']/((2**16)/2.0))*pickerSize #value converted to proportion full then multiplied by pickersize
+						if (event['axis']==horizontalAxisLeft) or (event['axis']==horizontalAxisRight):
+							pickerX = pickerX + moveSize
+						elif (event['axis']==verticalAxisLeft) or (event['axis']==verticalAxisRight):
+							pickerY = pickerY + moveSize
+					elif event['type'] = 'button':
+						done = True
+				drawWheel(rotation=wheelRotation)
+				drawPicker(pickerX,pickerY)
+				stimDisplay.refresh()
+			colorChoice = ','.join(map(str,numpy.fromstring(gl.glReadPixels(stimDisplayRes[0]/2+pickerX,stimDisplayRes[1]/2+pickerY,1,1,gl.GL_RGB,gl.GL_UNSIGNED_BYTE),dtype=numpy.uint8)))
 			#write out trial info
 			triggerData = [[[i[0]-targetOnTime,i[1]] for i in side] for side in triggerData]#fix times to be relative to target on time
 			triggerDataToWriteLeft = '\n'.join([trialDescrptor + '\tleft\t' + '\t'.join(map(str,i)) for i in triggerData[0]])
 			triggerDataToWriteRight = '\n'.join([trialDescrptor + '\tright\t' + '\t'.join(map(str,i)) for i in triggerData[1]])
 			writerChild.qTo.put(['write','trigger',triggerDataToWriteLeft])
 			writerChild.qTo.put(['write','trigger',triggerDataToWriteRight])
-			dataToWrite = '\t'.join(map(str,[ subInfoForFile , messageViewingTime , block , trialNum , cueValidity , targetSide , targetIdentity , targetColor , rt , notDouble , preTargetResponse , feedbackResponse ]))
+			dataToWrite = '\t'.join(map(str,[ subInfoForFile , messageViewingTime , block , trialNum , cueValidity , targetSide , targetIdentity , targetColor , rt , notDouble , preTargetResponse , feedbackResponse , wheelRotation , colorChoice , pickerX , pickerY ]))
 			writerChild.qTo.put(['write','data',dataToWrite])
 			if doEyelink:
 				if response=='p':
