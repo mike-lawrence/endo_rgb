@@ -78,6 +78,60 @@ qTo
 					subprocess.call('./edf2asc '+edfPath)
 		sys.exit()
 
+	#define a class for a clickable text UI
+	class clickableText:
+		def __init__(self,x,y,text,rightJustified=False,valueText=''):
+			self.x = x
+			self.y = y
+			self.text = text
+			self.rightJustified = rightJustified
+			self.valueText = valueText
+			self.isActive = False
+			self.clicked = False
+			self.updateSurf()
+		def updateSurf(self):
+			if self.isActive:
+				self.surf = sdl2.sdlttf.TTF_RenderText_Blended_Wrapped(font,self.text+self.valueText,sdl2.pixels.SDL_Color(r=0, g=255, b=255, a=255),previewWindow.size[0]).contents
+			else:
+				self.surf = sdl2.sdlttf.TTF_RenderText_Blended_Wrapped(font,self.text+self.valueText,sdl2.pixels.SDL_Color(r=0, g=0, b=255, a=255),previewWindow.size[0]).contents
+		def checkIfActive(self,event):
+			if self.rightJustified:
+				xLeft = self.x - self.surf.w
+				xRight = self.x
+			else:
+				xLeft = self.x
+				xRight = self.x + self.surf.w
+			if (event.button.x>xLeft) & (event.button.x<xRight) & (event.button.y>self.y) & (event.button.y<(self.y+fontSize)):
+				self.isActive = True
+			else:
+				self.isActive = False
+			self.updateSurf()
+		def draw(self,targetWindowSurf):
+			if self.rightJustified:
+				sdl2.SDL_BlitSurface(self.surf, None, targetWindowSurf, sdl2.SDL_Rect(self.x-self.surf.w,self.y,self.surf.w,self.surf.h))
+			else:
+				sdl2.SDL_BlitSurface(self.surf, None, targetWindowSurf, sdl2.SDL_Rect(self.x,self.y,self.surf.w,self.surf.h))
+
+	#define a class for settings
+	class settingText(clickableText):
+		def __init__(self,value,x,y,text,rightJustified=False):
+			self.value = value
+			self.valueText = str(value)
+			clickableText.__init__(self,x,y,text,rightJustified,self.valueText)
+		def addValue(self,toAdd):
+			self.valueText = self.valueText+toAdd
+			self.updateSurf()
+		def delValue(self):
+			if self.valueText!='':
+				self.valueText = self.valueText[0:(len(self.valueText)-1)]
+				self.updateSurf()
+		def finalizeValue(self):
+			try:
+				self.value = int(self.valueText)
+			except:
+				print 'Non-numeric value entered!'
+
+
 
 	edfPath = './_Data/temp.edf' #temporary default location, to be changed later when ID is established
 	eyelink = pylink.EyeLink(eyelinkIP)
@@ -87,8 +141,18 @@ qTo
 	eyelink.openDataFile(edfFileName)
 	eyelink.sendCommand("screen_pixel_coords =  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
 	eyelink.sendMessage("DISPLAY_COORDS  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
-	eyelink.sendCommand("saccade_velocity_threshold = 60")
-	eyelink.sendCommand("saccade_acceleration_threshold = 19500")
+
+	#create saccade threshold settings
+	settingsDict = {}
+	settingsDict['velocity'] = settingText(value=30,x=fontSize,y=fontSize,text='Velocity = ')
+	settingsDict['accelleration'] = settingText(value=9500,x=fontSize,y=fontSize*2,text='Accelleration = ')
+	settingsDict['distance'] = settingText(value=0.15,x=fontSize,y=fontSize*3,text='Distance = ')
+
+
+	#send the initial settings
+	for setting in settingsDict:
+		sendCommand("saccade_"+setting+"_threshold =%d"%(settingsDict[setting].value))
+
 
 	class EyeLinkCoreGraphicsPySDL2(pylink.EyeLinkCustomDisplay):
 		def __init__(self,targetSize,windowSize,windowPosition):
@@ -132,6 +196,19 @@ qTo
 		def get_input_key(self):
 			sdl2.SDL_PumpEvents()
 			return None
+		def get_input_key(self):
+			tracker_mode = self.tracker.getTrackerMode()
+			sdl2.SDL_PumpEvents()
+			for event in sdl2.ext.get_events():
+				if event.type == sdl2.SDL_KEYDOWN:
+					keysym = event.key.keysym
+					if keysym.sym == sdl2.SDLK_ESCAPE:  # don't allow escape to control tracker unless calibrating
+						if tracker_mode in [pylink.EL_VALIDATE_MODE, pylink.EL_CALIBRATE_MODE]:
+							return [pylink.KeyInput(sdl2.SDLK_ESCAPE, 0)]
+						else:
+							return False
+					return [pylink.KeyInput(keysym.sym, keysym.mod)]
+			return None
 
 	customDisplay = EyeLinkCoreGraphicsPySDL2(targetSize=calibrationDotSize,windowSize=calibrationDisplayRes,windowPosition=calibrationDisplayPosition)
 	pylink.openGraphicsEx(customDisplay)
@@ -143,6 +220,40 @@ qTo
 			if event.type==sdl2.SDL_WINDOWEVENT:
 				if (event.window.event==sdl2.SDL_WINDOWEVENT_CLOSE):
 					exitSafely()
+			elif event.type==sdl2.SDL_MOUSEMOTION:
+				alreadyClicked = False
+				for setting in settingsDict:
+					if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
+						alreadyClicked = True
+				if not alreadyClicked:
+					for setting in settingsDict:
+						settingsDict[setting].checkIfActive(event)
+			elif event.type==sdl2.SDL_MOUSEBUTTONDOWN:
+				alreadyClicked = False
+				for setting in settingsDict:
+					if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
+						alreadyClicked = True
+				if not alreadyClicked:
+					for setting in settingsDict:
+						if settingsDict[setting].isActive:
+							settingsDict[setting].clicked = True
+			elif event.type==sdl2.SDL_KEYDOWN:
+				key = sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()
+				if key == 'backspace':
+					for setting in settingsDict:
+						if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
+							settingsDict[setting].delValue()
+				elif key=='return':
+					for setting in settingsDict:
+						if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
+							settingsDict[setting].finalizeValue()
+							sendCommand("saccade_"+setting+"_threshold =%d"%(settingsDict[setting].value))
+							settingsDict[setting].clicked = False
+				else:
+					for setting in settingsDict:
+						if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
+							settingsDict[setting].addValue(key)
+
 		if not qTo.empty():
 			message = qTo.get()
 			if message=='quit':
