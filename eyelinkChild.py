@@ -1,3 +1,6 @@
+#    gaze = eyeEvent.getEndGaze()
+#AttributeError: StartSaccadeEvent instance has no attribute 'getEndGaze'
+
 def eyelinkChildFunction(
 qTo
 , qFrom
