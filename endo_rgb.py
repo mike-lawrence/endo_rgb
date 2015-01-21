@@ -33,7 +33,7 @@ if __name__ == '__main__':
 	stamperWindowColor = [255,255,255]
 	stamperDoBorder = True
 
-	doEyelink = True
+	doEyelink = False
 	eyelinkWindowSize = (200,200)
 	eyelinkWindowPosition = (700,0)
 	eyelinkIP = '100.1.1.1'
@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
 	arrowSizeInDegrees = 2
 	offsetSizeInDegrees = 10
-	targetSizeInDegrees = 5
+	targetSizeInDegrees = 3
 	ringSizeInDegrees = 8
 	ringThicknessProportion = .8
 	pickerSizeInDegrees = 1
@@ -703,7 +703,7 @@ if __name__ == '__main__':
 		return trials
 
 
-	def waitAndWatch(timeoutTime,triggerData=None):
+	def waitAndWatch(timeoutTime,terminateOnResponse,triggerData=None):
 		responseMade = False
 		rts = []
 		if triggerData==None:
@@ -721,7 +721,7 @@ if __name__ == '__main__':
 				lastRightTrigger = triggerData[1][-1][-1]
 		while getTime()<timeoutTime:
 			responseMade,rts,triggerData = checkInput(triggerData)
-			if responseMade:
+			if responseMade & terminateOnResponse:
 				break
 		return [responseMade,rts,triggerData]
 
@@ -841,7 +841,7 @@ if __name__ == '__main__':
 			drawArrow(arrowDirection)
 			drawTargets(targetSide,targetIdentity,targetColor)
 
-			responseMade,rts,triggerData = waitAndWatch(timeoutTime=targetOnTime)
+			responseMade,rts,triggerData = waitAndWatch(timeoutTime=targetOnTime,terminateOnResponse=True)
 
 			if responseMade:
 				#cut the trial short if anticipation is made
@@ -866,7 +866,7 @@ if __name__ == '__main__':
 				stimDisplay.refresh()
 
 				#wait for response, if any
-				responseMade,rts,triggerData = waitAndWatch(timeoutTime=responseTimeoutTime,triggerData=triggerData)
+				responseMade,rts,triggerData = waitAndWatch(timeoutTime=responseTimeoutTime,terminateOnResponse=False,triggerData=triggerData)
 
 				#compute feedback
 				if targetIdentity=='square':
@@ -923,9 +923,11 @@ if __name__ == '__main__':
 			#Do color wheel here
 			wheelRotation = drawWheel()
 			pickerX,pickerY = [0,0]
+			pickerDrawX,pickerDrawY = [0,0]
 			drawPicker(pickerX,pickerY)
 			stimDisplay.refresh()
 			pickerStart = getTime()
+			doPicker = False
 			done = False
 			while not done:
 				#check for input
@@ -935,16 +937,43 @@ if __name__ == '__main__':
 						if event['value']=='escape':
 							exitSafely()
 					elif event['type'] == 'axis':
-						moveSize = (event['value']/((2**16)/2.0))*pickerSize/10.0 #value converted to proportion full then multiplied by pickersize
-						if (event['axis']==horizontalAxisLeft) or (event['axis']==horizontalAxisRight):
-							pickerX = pickerX + moveSize
-						elif (event['axis']==verticalAxisLeft) or (event['axis']==verticalAxisRight):
-							pickerY = pickerY + moveSize
+						# if (event['axis']==horizontalAxisLeft) or (event['axis']==horizontalAxisRight) or (event['axis']==verticalAxisLeft) or (event['axis']==verticalAxisRight):
+						if (event['axis']==horizontalAxisLeft) or (event['axis']==verticalAxisLeft):
+							if (event['axis']==horizontalAxisLeft):
+								pickerX = event['value']
+							elif (event['axis']==verticalAxisLeft):
+								pickerY = event['value']
+							magnitude = math.sqrt(pickerX**2+pickerY**2)
+							if magnitude>((2**16)/3.0):
+								doPicker=True
+								if pickerX==0:
+									pickerDrawX = 0
+									if pickerY>0:
+										pickerDrawY = (wheelSize-(wheelSize-wheelSize*.9)/2.0)
+									else:
+										pickerDrawY = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)
+								elif pickerY==0:
+									pickerDrawY = 0
+									if pickerX>0:
+										pickerDrawX = (wheelSize-(wheelSize-wheelSize*.9)/2.0)
+									else:
+										pickerDrawX = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)
+								else:
+									angle = math.atan((pickerY*1.0)/pickerX)
+									if pickerX>0:
+										pickerDrawX = (wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.cos(angle)
+										pickerDrawY = (wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.sin(angle)
+									else:
+										pickerDrawX = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.cos(angle)
+										pickerDrawY = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.sin(angle)
+							else:
+								doPicker=False
 					elif event['type'] == 'button':
 						pickerTime = getTime()-pickerStart
 						done = True
 				drawWheel(rotation=wheelRotation)
-				drawPicker(pickerX,pickerY)
+				if doPicker:
+					drawPicker(pickerDrawX,pickerDrawY)
 				stimDisplay.refresh()
 			colorChoice = ','.join(map(str,numpy.fromstring(gl.glReadPixels(stimDisplayRes[0]/2+pickerX,stimDisplayRes[1]/2+pickerY,1,1,gl.GL_RGB,gl.GL_UNSIGNED_BYTE),dtype=numpy.uint8)))
 			#write out trial info
