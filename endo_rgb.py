@@ -22,18 +22,10 @@ if __name__ == '__main__':
 
 	viewingDistance = 57.0 #units can be anything so long as they match those used in stimDisplayWidth below
 	stimDisplayWidth = 54.5 #units can be anything so long as they match those used in viewingDistance above
-	stimDisplayRes = (1920,1080)
-	stimDisplayPosition=(0-1440-1080,0)
+	stimDisplayRes = (1280, 1024)
+	stimDisplayPosition=(0,0)
 
-	writerWindowSize = (200,200)
-	writerWindowPosition = (300,0)
-
-	stamperWindowSize = (200,200)
-	stamperWindowPosition = (0,0)
-	stamperWindowColor = [255,255,255]
-	stamperDoBorder = True
-
-	doEyelink = False
+	doEyelink = True
 	eyelinkWindowSize = (200,200)
 	eyelinkWindowPosition = (700,0)
 	eyelinkIP = '100.1.1.1'
@@ -43,22 +35,18 @@ if __name__ == '__main__':
 	blinkSoundFile = '_Stimuli/stop.wav'
 	calibrationDotSizeInDegrees = 1
 
-	responseModality = 'trigger' # 'key' or 'trigger'
-	triggerLeftAxis = 2
-	triggerRightAxis = 5
-	triggerCriterionValue = -(2**16/4) #16 bit precision on the triggers, split criterion @a 25%
-	horizontalAxisLeft = 0
-	verticalAxisLeft = 1
-	horizontalAxisRight = 3
-	verticalAxisRight = 4
 
+	#gamepad trigger criterion value
+	triggerCriterionValue = 127 #min is 0, max is 255, so 127 is halfway
 
 	cueValidityList = ['valid','valid','invalid']
 	targetSideList = ['left','right']
-	targetIdentityList = ['square','diamond']
+	targetIdentityList = ['dot']#['square','diamond']
+
+	numTargetColors = 12
 	targetColorList = []
-	for i in range(9):
-		index = (len(fullColorList)/9.0)*i+(len(fullColorList)/9.0/2.0)
+	for i in range(numTargetColors):
+		index = (len(fullColorList)*1.0/numTargetColors)*i+(len(fullColorList)*1.0/numTargetColors/2.0)
 		targetColorList.append(fullColorList[int(index)])
 
 
@@ -67,10 +55,10 @@ if __name__ == '__main__':
 	responseTimeout = 1.000
 	feedbackDuration = 1.000
 
-	trialsPerBreak = 24
-	numberOfBlocks = 6 #3*2*2*12 = 144 trials per block, 3s per trial = 144*3/60 = 7.5mins per block
+	trialsPerBreak = 36
+	numberOfBlocks = 10 #3*2*12 = 72 trials per block, 3s per trial = 72*3/60 = 7.5mins per block
 
-	instructionSizeInDegrees = 1 
+	instructionSizeInDegrees = 1
 	feedbackSizeInDegrees = 1
 
 	arrowSizeInDegrees = 2
@@ -90,7 +78,6 @@ if __name__ == '__main__':
 	import sdl2 #for input and display
 	import sdl2.ext #for input and display
 	import numpy #for image and display manipulation
-	import scipy.misc #for resizing numpy images via scipy.misc.imresize
 	from PIL import Image #for image manipulation
 	from PIL import ImageFont
 	from PIL import ImageOps
@@ -121,7 +108,7 @@ if __name__ == '__main__':
 
 	#define a function that gets the time (unit=seconds,zero=?)
 	def getTime():
-		return sdl2.SDL_GetPerformanceCounter()*1.0/sdl2.SDL_GetPerformanceFrequency()
+		return time.time()
 
 
 	########
@@ -163,7 +150,7 @@ if __name__ == '__main__':
 
 	feedbackFontSize = feedbackFontSize - 1
 	feedbackFont = ImageFont.truetype ("_Stimuli/DejaVuSans.ttf", feedbackFontSize)
-	
+
 	instructionFontSize = 2
 	instructionFont = ImageFont.truetype ("_Stimuli/DejaVuSans.ttf", instructionFontSize)
 	instructionHeight = instructionFont.getsize('XXX')[1]
@@ -180,19 +167,13 @@ if __name__ == '__main__':
 	# Initialize the writer
 	########
 	writerChild = fileForker.childClass(childFile='writerChild.py')
-	writerChild.initDict['windowSize'] = writerWindowSize
-	writerChild.initDict['windowPosition'] = writerWindowPosition
 	writerChild.start()
 
 	########
 	# start the event timestamper
 	########
-	stamperChild = fileForker.childClass(childFile='stamperChild.py')
-	stamperChild.initDict['windowSize'] = stamperWindowSize
-	stamperChild.initDict['windowPosition'] = stamperWindowPosition
-	stamperChild.initDict['windowColor'] = stamperWindowColor
-	stamperChild.initDict['doBorder'] = stamperDoBorder
-	stamperChild.start()
+	gamepadChild = fileForker.childClass(childFile='gamepadChild.py')
+	gamepadChild.start()
 
 
 	########
@@ -202,8 +183,8 @@ if __name__ == '__main__':
 		eyelinkChild = fileForker.childClass(childFile='eyelinkChild.py')
 		eyelinkChild.initDict['windowSize'] = eyelinkWindowSize
 		eyelinkChild.initDict['windowPosition'] = eyelinkWindowPosition
-		eyelinkChild.initDict['calibrationDisplayPosition'] = (0-1440-1080,0)
-		eyelinkChild.initDict['calibrationDisplayRes'] = (1920,1080)
+		eyelinkChild.initDict['calibrationDisplayPosition'] = stimDisplayPosition
+		eyelinkChild.initDict['calibrationDisplayRes'] = stimDisplayRes
 		eyelinkChild.initDict['calibrationDotSize'] = calibrationDotSize
 		eyelinkChild.initDict['eyelinkIP'] = eyelinkIP
 		eyelinkChild.initDict['edfFileName'] = edfFileName
@@ -222,7 +203,6 @@ if __name__ == '__main__':
 	########
 	# Initialize the stimDisplay
 	########
-	time.sleep(5)
 	class stimDisplayClass:
 		def __init__(self):
 			sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
@@ -230,7 +210,7 @@ if __name__ == '__main__':
 			self.dt = None #for keeping track of the time between updates
 			return None
 		def show(self,stimDisplayRes,stimDisplayPosition):
-			self.Window = sdl2.ext.Window("Experiment", size=stimDisplayRes,position=stimDisplayPosition,flags=sdl2.SDL_WINDOW_OPENGL|sdl2.SDL_WINDOW_SHOWN| sdl2.SDL_WINDOW_FULLSCREEN_DESKTOP |sdl2.SDL_RENDERER_ACCELERATED | sdl2.SDL_RENDERER_PRESENTVSYNC)
+			self.Window = sdl2.ext.Window("Experiment", size=stimDisplayRes,position=stimDisplayPosition,flags=sdl2.SDL_WINDOW_SHOWN| sdl2.SDL_WINDOW_OPENGL|sdl2.SDL_WINDOW_FULLSCREEN_DESKTOP |sdl2.SDL_RENDERER_ACCELERATED | sdl2.SDL_RENDERER_PRESENTVSYNC)
 			self.glContext = sdl2.SDL_GL_CreateContext(stimDisplay.Window.window)
 			gl.glMatrixMode(gl.GL_PROJECTION)
 			gl.glLoadIdentity()
@@ -238,7 +218,7 @@ if __name__ == '__main__':
 			gl.glMatrixMode(gl.GL_MODELVIEW)
 			gl.glDisable(gl.GL_DEPTH_TEST)
 			gl.glClearColor(0,0,0,1)
-			gl.glClear(gl.GL_COLOR_BUFFER_BIT)			
+			gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 			return None
 		def refresh(self):
 			sdl2.SDL_GL_SwapWindow(self.Window.window)
@@ -256,7 +236,7 @@ if __name__ == '__main__':
 
 	stimDisplay = stimDisplayClass()
 	stimDisplay.show(stimDisplayRes=stimDisplayRes,stimDisplayPosition=stimDisplayPosition)
-	
+
 	for i in range(10):
 		sdl2.SDL_PumpEvents() #to show the windows
 
@@ -417,11 +397,11 @@ if __name__ == '__main__':
 	def drawPicker(xOffset,yOffset):
 		underColor = numpy.fromstring(gl.glReadPixels(stimDisplayRes[0]/2+xOffset,stimDisplayRes[1]/2-yOffset,1,1,gl.GL_RGB,gl.GL_UNSIGNED_BYTE),dtype=numpy.uint8)
 		pickerDraw = aggdraw.Draw('RGBA',[pickerSize*3,pickerSize*3],(0,0,0,0))
-		pickerDraw.ellipse((pickerSize,pickerSize,pickerSize*2,pickerSize*2),aggdraw.Brush((127,127,127,255)))
+		pickerDraw.ellipse((pickerSize,pickerSize,pickerSize*2,pickerSize*2),aggdraw.Brush((0,0,0,255)))
 		pickerDraw.ellipse((pickerSize+int(pickerSize/4.0),pickerSize+int(pickerSize/4.0),pickerSize*2-int(pickerSize/4.0),pickerSize*2-int(pickerSize/4.0)),aggdraw.Brush((underColor[0],underColor[1],underColor[2],255)))
 		pickerDraw.flush()
 		pickerString = pickerDraw.tostring()
-		pickerPil = Image.fromstring('RGBA',[pickerSize*3,pickerSize*3],pickerString)
+		pickerPil = Image.frombytes('RGBA',[pickerSize*3,pickerSize*3],pickerString)
 		pickerArray = numpy.array(pickerPil,dtype=numpy.uint8)
 		blitNumpy(pickerArray,stimDisplayRes[0]/2+xOffset,stimDisplayRes[1]/2+yOffset)
 		return None
@@ -545,7 +525,7 @@ if __name__ == '__main__':
 		drawRing(-xOffset)
 		if targetIdentity=='square':
 			drawSquare(xOffset)
-		else:
+		elif targetIdentity=='diamond':
 			drawDiamond(xOffset)
 		drawColorTarget(xOffset,targetColor)
 		return None
@@ -574,8 +554,8 @@ if __name__ == '__main__':
 		writerChild.stop()
 		if doEyelink:
 			eyelinkChild.stop()
-		stamperChild.stop(killAfter=60)
-		while stamperChild.isAlive():
+		gamepadChild.stop(killAfter=1)
+		while gamepadChild.isAlive():
 			time.sleep(.1)
 		sdl2.ext.quit()
 		sys.exit()
@@ -585,20 +565,21 @@ if __name__ == '__main__':
 	def waitForResponse():
 		done = False
 		while not done:
-			if not stamperChild.qFrom.empty():
-				event = stamperChild.qFrom.get()
-				if event['type']=='key':
-					response = event['value']
-					if response=='escape':
+			sdl2.SDL_PumpEvents()
+			for event in sdl2.ext.get_events():
+				if event.type==sdl2.SDL_KEYDOWN:
+					if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
 						exitSafely()
 					else:
 						done = True
-				elif event['type'] == 'axis':
-					response = event['axis']
+			if not gamepadChild.qFrom.empty():
+				event = gamepadChild.qFrom.get()
+				if (event['type']=='buttonDown'):
+					done = True
+				elif event['type'] == 'trigger':
 					if event['value']>triggerCriterionValue:
 						done = True
-		return response
-
+		return None
 
 	#define a function that prints a message on the stimDisplay while looking for user input to continue. The function returns the total time it waited
 	def showMessage(myText):
@@ -639,10 +620,10 @@ if __name__ == '__main__':
 		#gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 		done = False
 		while not done:
-			if not stamperChild.qFrom.empty():
-				event = stamperChild.qFrom.get()
-				if event['type'] == 'key' :
-					response = event['value']
+			sdl2.SDL_PumpEvents()
+			for event in sdl2.ext.get_events():
+				if event.type==sdl2.SDL_KEYDOWN:
+					response = sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()
 					if response=='escape':
 						exitSafely()
 					elif response == 'backspace':
@@ -703,25 +684,25 @@ if __name__ == '__main__':
 		return trials
 
 
-	def waitAndWatch(timeoutTime,terminateOnResponse,triggerData=None):
+	def waitAndWatch(timeoutTime,triggerData=None):
 		responseMade = False
 		rts = []
 		if triggerData==None:
 			triggerData = [[],[]]
-			lastLeftTrigger = -(2**16/2)
-			lastRightTrigger = -(2**16/2)
+			lastLeftTrigger = 0
+			lastRightTrigger = 0
 		else:
 			if len(triggerData[0])<1:
-				lastLeftTrigger = -(2**16/2)
+				lastLeftTrigger = 0
 			else:
 				lastLeftTrigger = triggerData[0][-1][-1]
 			if len(triggerData[1])<1:
-				lastRightTrigger = -(2**16/2)
+				lastRightTrigger = 0
 			else:
 				lastRightTrigger = triggerData[1][-1][-1]
 		while getTime()<timeoutTime:
 			responseMade,rts,triggerData = checkInput(triggerData)
-			if responseMade & terminateOnResponse:
+			if responseMade:
 				break
 		return [responseMade,rts,triggerData]
 
@@ -729,36 +710,34 @@ if __name__ == '__main__':
 	def checkInput(triggerData=None):
 		if triggerData==None:
 			triggerData = [[],[]]
-			lastLeftTrigger = -(2**16/2)
-			lastRightTrigger = -(2**16/2)
+			lastLeftTrigger = 0
+			lastRightTrigger = 0
 		else:
 			if len(triggerData[0])<1:
-				lastLeftTrigger = -(2**16/2)
+				lastLeftTrigger = 0
 			else:
 				lastLeftTrigger = triggerData[0][-1][-1]
 			if len(triggerData[1])<1:
-				lastRightTrigger = -(2**16/2)
+				lastRightTrigger = 0
 			else:
 				lastRightTrigger = triggerData[1][-1][-1]
 		responseMade = False
 		rts = [[],[]]
-		while not stamperChild.qFrom.empty():
-			event = stamperChild.qFrom.get()
-			if event['type'] == 'key' :
-				if event['value']=='escape':
-					exitSafely()
-				else:
-					responseMade = True
-					rts[0].append(event['time'])
-					rts[1].append(event['time'])
-			if event['type'] == 'axis':
-				if event['axis']==triggerLeftAxis:
+		while not gamepadChild.qFrom.empty():
+			sdl2.SDL_PumpEvents()
+			for event in sdl2.ext.get_events():
+				if event.type==sdl2.SDL_KEYDOWN:
+					if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
+						exitSafely()
+			event = gamepadChild.qFrom.get()
+			if event['type'] == 'trigger':
+				if event['side']=='left':
 					triggerData[0].append([event['time'],event['value']])
 					if event['value']>=triggerCriterionValue:
 						if lastLeftTrigger<triggerCriterionValue:
 							responseMade = True
 							rts[0].append(event['time'])
-				elif event['axis']==triggerRightAxis:
+				elif event['side']=='right':
 					triggerData[1].append([event['time'],event['value']])
 					if event['value']>=triggerCriterionValue:
 						if lastRightTrigger<triggerCriterionValue:
@@ -773,25 +752,25 @@ if __name__ == '__main__':
 		start = getTime()
 		while (getTime()-start)<1:
 			checkInput()
-		
+
 		print 'block started'
 
 		#get trials
-		trialList = getTrials()	
+		trialList = getTrials()
 
 		#run the trials
 		trialNum = 0
 		while trialNum<trialsPerBreak:
 			#bump the trial number
 			trialNum = trialNum + 1
-			
+
 			#get the trial info
 			# trialInfo = random.choice(trialList) #random trial type (ensures true equiprobablilty of conditions for [on average] unbiased *behaviour*)
 			trialInfo = trialList.pop(0) #iterates through trial types (ensures equal cell sizes for unbiased *analysis*)
 
 			#parse the trial info
 			cueValidity,targetSide,targetIdentity,targetColor = trialInfo
-			
+
 			trialDescrptor = '\t'.join(map(str,[subInfo[0],block,trialNum]))
 
 			if doEyelink:
@@ -832,7 +811,7 @@ if __name__ == '__main__':
 			drawFixation(arrowDirection)
 			stimDisplay.refresh() #this one should block until it's actually displayed
 
-			#get the trial start time 
+			#get the trial start time
 			trialStartTime = getTime() - 1/60.0
 			targetOnTime = trialStartTime + cueTargetSOA
 			responseTimeoutTime = targetOnTime + responseTimeout
@@ -841,7 +820,7 @@ if __name__ == '__main__':
 			drawArrow(arrowDirection)
 			drawTargets(targetSide,targetIdentity,targetColor)
 
-			responseMade,rts,triggerData = waitAndWatch(timeoutTime=targetOnTime,terminateOnResponse=True)
+			responseMade,rts,triggerData = waitAndWatch(timeoutTime=targetOnTime)
 
 			if responseMade:
 				#cut the trial short if anticipation is made
@@ -858,7 +837,7 @@ if __name__ == '__main__':
 				#show the mask for 100ms
 				for i in range(6): #6 frame yields 100ms
 					drawFixation(arrowDirection)
-					drawMask(targetSide)
+					# drawMask(targetSide)
 					stimDisplay.refresh()
 
 				#show the fixation screen until response
@@ -866,47 +845,47 @@ if __name__ == '__main__':
 				stimDisplay.refresh()
 
 				#wait for response, if any
-				responseMade,rts,triggerData = waitAndWatch(timeoutTime=responseTimeoutTime,terminateOnResponse=False,triggerData=triggerData)
+				responseMade,rts,triggerData = waitAndWatch(timeoutTime=responseTimeoutTime,triggerData=triggerData)
 
 				#compute feedback
-				if targetIdentity=='square':
+				if (targetIdentity=='square')or(targetIdentity=='dot'):
 					if not responseMade:
 						feedbackText = 'Miss!'
 						print 'miss'
-					else:
-						if (len(rts[0])==0) or (len(rts[1])==0):
-							notDouble = 'TRUE'
-							feedbackText = 'Use both!'
-							print 'only one trigger pressed'
-						else:
-							rt = (rts[0][0]+rts[1][0])/2.0-targetOnTime
-							if rt<0:
-								preTargetResponse = 'TRUE'
-								feedbackText = 'Too soon!'
-								print 'anticipation'
-							else:
-								feedbackText = str(int(rt*10)) #tenths of seconds
-								print feedbackText
-				else:
-					if responseMade:
-						if (len(rts[0])==0) or (len(rts[1])==0):
-							notDouble = 'TRUE'
-							feedbackText = 'Use both!'
-							print 'only one trigger pressed'
-						else:
-							rt = (rts[0][0]+rts[1][0])/2.0-targetOnTime
-							if rt<0:
-								preTargetResponse = 'TRUE'
-								feedbackText = 'Too soon!'
-								print 'anticipation'
-							else:
-								feedbackText = 'Oops!'
-								print 'false alarm'
-					else:
-						feedbackText = 'Good'
-						print 'nogo'
+					# else:
+					# 	if (len(rts[0])==0) or (len(rts[1])==0):
+					# 		notDouble = 'TRUE'
+					# 		feedbackText = 'Use both!'
+					# 		print 'only one trigger pressed'
+					# 	else:
+					# 		rt = (rts[0][0]+rts[1][0])/2.0-targetOnTime
+					# 		if rt<0:
+					# 			preTargetResponse = 'TRUE'
+					# 			feedbackText = 'Too soon!'
+					# 			print 'anticipation'
+					# 		else:
+					# 			feedbackText = str(int(rt*10)) #tenths of seconds
+					# 			print feedbackText
+				# else:
+				# 	if responseMade:
+				# 		if (len(rts[0])==0) or (len(rts[1])==0):
+				# 			notDouble = 'TRUE'
+				# 			feedbackText = 'Use both!'
+				# 			print 'only one trigger pressed'
+				# 		else:
+				# 			rt = (rts[0][0]+rts[1][0])/2.0-targetOnTime
+				# 			if rt<0:
+				# 				preTargetResponse = 'TRUE'
+				# 				feedbackText = 'Too soon!'
+				# 				print 'anticipation'
+				# 			else:
+				# 				feedbackText = 'Oops!'
+				# 				print 'false alarm'
+				# 	else:
+				# 		feedbackText = 'Good'
+				# 		print 'nogo'
 			#show feedback
-			drawFeedback(feedbackText)
+			#drawFeedback(feedbackText)
 			stimDisplay.refresh()
 			trialDoneTime = getTime()
 			if doEyelink:
@@ -917,34 +896,32 @@ if __name__ == '__main__':
 				pass
 			#check for responses here
 			responseMade2,rts2,triggerData = checkInput(triggerData)
-			if responseMade2:
-				feedbackResponse = 'TRUE'
-				print 'feedback response made'
+			# if responseMade2:
+			# 	feedbackResponse = 'TRUE'
+			# 	print 'feedback response made'
 			#Do color wheel here
 			wheelRotation = drawWheel()
 			pickerX,pickerY = [0,0]
 			pickerDrawX,pickerDrawY = [0,0]
-			drawPicker(pickerX,pickerY)
 			stimDisplay.refresh()
 			pickerStart = getTime()
 			doPicker = False
 			done = False
 			while not done:
-				#check for input
-				while (not stamperChild.qFrom.empty()) and ((getTime()-stimDisplay.lastUpdate)<.01):
-					event = stamperChild.qFrom.get()
-					if event['type'] == 'key' :
-						if event['value']=='escape':
+				sdl2.SDL_PumpEvents()
+				for event in sdl2.ext.get_events():
+					if event.type==sdl2.SDL_KEYDOWN:
+						if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
 							exitSafely()
-					elif event['type'] == 'axis':
-						# if (event['axis']==horizontalAxisLeft) or (event['axis']==horizontalAxisRight) or (event['axis']==verticalAxisLeft) or (event['axis']==verticalAxisRight):
-						if (event['axis']==horizontalAxisLeft) or (event['axis']==verticalAxisLeft):
-							if (event['axis']==horizontalAxisLeft):
-								pickerX = event['value']
-							elif (event['axis']==verticalAxisLeft):
-								pickerY = event['value']
+				#check for input
+				while (not gamepadChild.qFrom.empty()) and ((getTime()-stimDisplay.lastUpdate)<.01):
+					event = gamepadChild.qFrom.get()
+					if event['type'] == 'stick':
+						if event['side']=='right':
+							pickerX,pickerY = event['value']
+							pickerY = -pickerY
 							magnitude = math.sqrt(pickerX**2+pickerY**2)
-							if magnitude>((2**16)/3.0):
+							if magnitude>(255/3.0):
 								doPicker=True
 								if pickerX==0:
 									pickerDrawX = 0
@@ -968,7 +945,7 @@ if __name__ == '__main__':
 										pickerDrawY = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.sin(angle)
 							else:
 								doPicker=False
-					elif event['type'] == 'button':
+					elif event['type'] == 'buttonDown':
 						pickerTime = getTime()-pickerStart
 						done = True
 				drawWheel(rotation=wheelRotation)

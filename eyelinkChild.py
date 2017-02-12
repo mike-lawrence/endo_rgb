@@ -176,12 +176,12 @@ qTo
 			else:#	CAL_GOOD_BEEP or DC_GOOD_BEEP
 				self.__target_beep__done__.play()
 		def clear_cal_display(self): 
-			sdl2.ext.fill(self.windowSurf.contents,sdl2.pixels.SDL_Color(r=255, g=255, b=255, a=255))
+			sdl2.ext.fill(self.windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
 			self.window.refresh()
-			sdl2.ext.fill(self.windowSurf.contents,sdl2.pixels.SDL_Color(r=255, g=255, b=255, a=255))
+			sdl2.ext.fill(self.windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
 			sdl2.SDL_PumpEvents()
 		def setup_cal_display(self):
-			self.window = sdl2.ext.Window("Calibration",size=self.windowSize,position=self.windowPosition,flags=sdl2.SDL_WINDOW_SHOWN)#|sdl2.SDL_WINDOW_BORDERLESS)
+			self.window = sdl2.ext.Window("Calibration",size=self.windowSize,position=self.windowPosition,flags=sdl2.SDL_WINDOW_SHOWN|sdl2.SDL_WINDOW_BORDERLESS)
 			self.windowID = sdl2.SDL_GetWindowID(self.window.window)
 			self.windowSurf = sdl2.SDL_GetWindowSurface(self.window.window)
 			self.windowArray = sdl2.ext.pixels3d(self.windowSurf.contents)
@@ -196,7 +196,7 @@ qTo
 			radius = self.targetSize/2
 			yy, xx = numpy.ogrid[-radius: radius, -radius: radius]
 			index = numpy.logical_and( (xx**2 + yy**2) <= (radius**2) , (xx**2 + yy**2) >= ((radius/4)**2) )
-			self.windowArray[ (x-radius):(x+radius) , (y-radius):(y+radius) ,  ][index] = [0,0,0,255]
+			self.windowArray[ (x-radius):(x+radius) , (y-radius):(y+radius) ,  ][index] = [200,200,200,255]
 			self.window.refresh()
 			sdl2.SDL_PumpEvents()
 		def get_input_key(self):
