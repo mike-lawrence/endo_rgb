@@ -562,14 +562,12 @@ if __name__ == '__main__':
 		eyelinkChild.qTo.put('doCalibration')
 		calibrationDone = False
 		while not calibrationDone:
-			if not stamperChild.qFrom.empty():
-				event = stamperChild.qFrom.get()
-				if event['type'] == 'key' :
-					key = event['value']
-					if key=='q':
+			for event in sdl2.ext.get_events():
+				if event.type==sdl2.SDL_KEYDOWN:
+					if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
 						exitSafely()
-					else: #pass keys to eyelink
-						eyelinkChild.qTo.put(['keycode',event['keysym']])
+					else:
+						eyelinkChild.qTo.put(['keycode',event.key.keysym])
 			if not eyelinkChild.qFrom.empty():
 				message = eyelinkChild.qFrom.get()
 				if message=='calibrationComplete':
@@ -766,10 +764,10 @@ if __name__ == '__main__':
 			trialDescriptor = '\t'.join(map(str,[subInfo[0],block,trialNum]))
 
 			#do drift correction
+			start = getTime()
 			if doEyelink:
 				drawCalTarget()
 				stimDisplay.refresh()
-				start = getTime()
 				outerDone = False
 				while not outerDone:
 					drawCalTarget()
@@ -786,14 +784,19 @@ if __name__ == '__main__':
 								doCalibration()
 								innerDone = True
 								outerDone = False
-						while not stamperChild.qFrom.empty():
-							event = stamperChild.qFrom.get()
-							if event['type'] == 'key' :
-								keyName = event['value']
-								if keyName=='q':
-									exit_safely()
+						for event in sdl2.ext.get_events():
+							if event.type==sdl2.SDL_KEYDOWN:
+								if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
+									exitSafely()
 								else:
-									eyelinkChild.qTo.put(['keycode',event['keysym']])
+									eyelinkChild.qTo.put(['keycode',event.key.keysym])
+									print [sdl2.SDL_GetKeyName(event.key.keysym.sym).lower(),event.key.keysym]
+						#check for gamepad input
+						while not gamepadChild.qFrom.empty():
+							event = gamepadChild.qFrom.get()
+							if event['type'] == 'button':
+								eyelinkChild.qTo.put(['acceptTrigger'])
+
 				eyelinkChild.qTo.put(['reportBlinks',True])
 				eyelinkChild.qTo.put(['reportSaccades',True])
 			trialInitiationTime = getTime() - start
@@ -817,7 +820,8 @@ if __name__ == '__main__':
 			stimDisplay.refresh()
 			drawFixation(arrowDirection)
 			stimDisplay.refresh() #this one should block until it's actually displayed
-			eyelinkChild.qTo.put(['edfEntry','trialStart\t'+trialDescriptor])
+			if doEyelink:
+				eyelinkChild.qTo.put(['edfEntry','trialStart\t'+trialDescriptor])
 
 			#get the trial start time
 			trialStartTime = getTime() - 1/60.0
@@ -836,15 +840,17 @@ if __name__ == '__main__':
 			anticipation = False
 			feedbackResponse = False
 			rt = 'NA'
+			rtLeft = 'NA'
+			rtRight = 'NA'
 
 			biggestSmallSaccade = 0
 			blink = False
 			saccade = False
 
-			rtList = {'left'=[],'right'=[]}
-			triggerData = {'left'=[],'right'=[]}
-			triggerData['left'].append({'time'=getTime(),'value'=0})
-			triggerData['right'].append({'time'=getTime(),'value'=0})
+			rtList = {'left':[],'right':[]}
+			triggerData = {'left':[],'right':[]}
+			triggerData['left'].append({'time':getTime(),'value':0})
+			triggerData['right'].append({'time':getTime(),'value':0})
 
 			trialDone = False
 			while not trialDone:
@@ -869,9 +875,9 @@ if __name__ == '__main__':
 					event = gamepadChild.qFrom.get()
 					if event['type'] == 'trigger':
 						event['time'] = event['time']-targetOnTime
-						triggerData[event['side']].append({'time'=event['time'],'value'=event['value']})
+						triggerData[event['side']].append({'time':event['time'],'value':event['value']})
 						if event['value']>=triggerCriterionValue:
-							if triggerData[event['side']][-1]['value']<triggerCriterionValue:
+							if triggerData[event['side']][-2]['value']<triggerCriterionValue:
 								rtList[event['side']].append(event['time'])
 								if not targetShown:
 									trialDone = True
@@ -879,17 +885,19 @@ if __name__ == '__main__':
 								if (len(rtList['left'])>0) & (len(rtList['right'])>0):
 									trialDone = True
 				#manage stimuli
-				if not tagetShown:
+				if not targetShown:
 					if getTime()>=targetOnTime:
 						stimDisplay.refresh() #show the target
 						targetShown = True
-						eyelinkChild.qTo.put(['edfEntry','targetOn\t'+trialDescriptor])
+						if doEyelink:
+							eyelinkChild.qTo.put(['edfEntry','targetOn\t'+trialDescriptor])
 						drawFixation(arrowDirection)
 				elif not targetRemoved:
 					if getTime()>=targetOffTime:
 						stimDisplay.refresh() #remove the target
 						targetRemoved = True
-						eyelinkChild.qTo.put(['edfEntry','targetOff\t'+trialDescriptor])
+						if doEyelink:
+							eyelinkChild.qTo.put(['edfEntry','targetOff\t'+trialDescriptor])
 				else:
 					if getTime()>=responseTimeoutTime:
 						miss = True
@@ -907,6 +915,8 @@ if __name__ == '__main__':
 				feedbackText = 'Too soon!'
 			else:
 				rt = (rtList['left'][-1]+rtList['right'][-1])/2.0
+				rtLeft = rtList['left'][-1]
+				rtRight = rtList['right'][-1]
 				feedbackText = str(int(rt*100)) #convert from seconds to hundredths of seconds
 			#show feedback
 			drawFeedback(feedbackText)
@@ -923,7 +933,7 @@ if __name__ == '__main__':
 					event = gamepadChild.qFrom.get()
 					if event['type'] == 'trigger':
 						event['time'] = event['time']-targetOnTime
-						triggerData[event['side']].append({'time'=event['time'],'value'=event['value']})
+						triggerData[event['side']].append({'time':event['time'],'value':event['value']})
 						if event['value']>=triggerCriterionValue:
 							if triggerData[event['side']][-1]['value']<triggerCriterionValue:
 								feedbackResponse = True
@@ -983,19 +993,8 @@ if __name__ == '__main__':
 			triggerDataToWriteRight = '\n'.join([trialDescriptor + '\tright\t' + '\t'.join(map(str,i)) for i in triggerData['right']])
 			writerChild.qTo.put(['write','trigger',triggerDataToWriteLeft])
 			writerChild.qTo.put(['write','trigger',triggerDataToWriteRight])
-			dataToWrite = '\t'.join(map(str,[ subInfoForFile , messageViewingTime , block , trialNum , cueValidity , targetSide , targetIdentity , targetColor , rt , preTargetResponse , feedbackResponse , wheelRotation , colorChoice , pickerX , pickerY , pickerTime ]))
+			dataToWrite = '\t'.join(map(str,[ subInfoForFile , messageViewingTime , block , trialNum , cueValidity , targetSide , targetIdentity , targetColor , rt , rtLeft , rtRight , anticipation , feedbackResponse , wheelRotation , colorChoice , pickerX , pickerY , pickerTime ]))
 			writerChild.qTo.put(['write','data',dataToWrite])
-			if doEyelink:
-				if response=='p':
-					stimDisplay.hide()
-					eyelinkChild.qTo.put('doCalibration')
-					done = False
-					while not done:
-						if not eyelinkChild.qFrom.empty():
-							message = eyelinkChild.qFrom.get()
-							if message=='calibrationComplete':
-								done = True
-					stimDisplay.show()
 		print 'on break'
 
 
@@ -1025,7 +1024,7 @@ if __name__ == '__main__':
 
 	writerChild.qTo.put(['newFile','data','_Data/'+filebase+'/'+filebase+'_data.txt'])
 	writerChild.qTo.put(['write','data',password])
-	header ='\t'.join(['id' , 'year' , 'month' , 'day' , 'hour' , 'minute' , 'sex' , 'age'  , 'handedness' , 'messageViewingTime' , 'block' , 'trialNum' , 'cueValidity' , 'targetSide' , 'targetIdentity' , 'targetColor' , 'rt' , 'preTargetResponse' , 'feedbackResponse' , 'wheelRotation' , 'colorChoice' , 'pickerX' , 'pickerY' , 'pickerTime'])
+	header ='\t'.join(['id' , 'year' , 'month' , 'day' , 'hour' , 'minute' , 'sex' , 'age'  , 'handedness' , 'messageViewingTime' , 'block' , 'trialNum' , 'cueValidity' , 'targetSide' , 'targetIdentity' , 'targetColor' , 'rt', 'rtLeft', 'rtRight' , 'anticipation' , 'feedbackResponse' , 'wheelRotation' , 'colorChoice' , 'pickerX' , 'pickerY' , 'pickerTime'])
 	writerChild.qTo.put(['write','data',header])
 
 	writerChild.qTo.put(['newFile','trigger','_Data/'+filebase+'/'+filebase+'_trigger.txt'])
@@ -1039,16 +1038,16 @@ if __name__ == '__main__':
 	# Start the experiment
 	########
 
-	messageViewingTime = showMessage('Press any trigger to begin practice.')
+	messageViewingTime = showMessage('Press any button to begin practice.')
 	block = 'practice'
 	runBlock()
-	messageViewingTime = showMessage('Practice is complete.\nPress any trigger to begin the experiment.')
+	messageViewingTime = showMessage('Practice is complete.\nPress any button to begin the experiment.')
 
 	for i in range(numberOfBlocks):
 		block = i+1
 		runBlock()
 		if block<(numberOfBlocks):
-			messageViewingTime = showMessage('Take a break!\nYou\'re about '+str(block)+'/'+str(numberOfBlocks)+' done.\nWhen you are ready, press any trigger to continue the experiment.')
+			messageViewingTime = showMessage('Take a break!\nYou\'re about '+str(block)+'/'+str(numberOfBlocks)+' done.\nWhen you are ready, press any button to continue the experiment.')
 
 	messageViewingTime = showMessage('You\'re all done!\nPlease alert the person conducting this experiment that you have finished.')
 

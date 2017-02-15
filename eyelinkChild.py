@@ -81,7 +81,7 @@ qTo
 				shutil.move('temp.edf', edfPath)
 				if os.path.isfile(edfPath):
 					print edfPath+' exists'
-					subprocess.call('./edf2asc '+edfPath)
+					#subprocess.call('./edf2asc '+edfPath)
 		sys.exit()
 
 	#define a class for a clickable text UI
@@ -146,7 +146,7 @@ qTo
 	eyelink.setLinkEventFilter("SACCADE,BLINK")
 	eyelink.openDataFile(edfFileName)
 	eyelink.sendCommand("screen_pixel_coords =  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
-	eyelink.edfEntry("DISPLAY_COORDS  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
+	eyelink.sendMessage("DISPLAY_COORDS  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
 
 	#create saccade threshold settings
 	settingsDict = {}
@@ -203,6 +203,9 @@ qTo
 			sdl2.SDL_PumpEvents()
 			return None
 		def get_input_key(self):
+			if not qTo.empty():
+				if message[0]=='acceptTrigger':
+					eyelink.accept_trigger()			
 			# tracker_mode = self.tracker.getTrackerMode()
 			sdl2.SDL_PumpEvents()
 			for event in sdl2.ext.get_events():
@@ -213,6 +216,7 @@ qTo
 					# 		return [pylink.KeyInput(sdl2.SDLK_ESCAPE, 0)]
 					# 	else:
 					# 		return False
+					print [keysym.sym,keysym.mod,pylink.KeyInput(keysym.sym, keysym.mod)]
 					return [pylink.KeyInput(keysym.sym, keysym.mod)]
 			return None
 
@@ -269,8 +273,8 @@ qTo
 			elif message[0]=='doSounds':
 				doSounds = message[1]
 			elif message[0]=='edfEntry':
-				eyelink.edfEntry(message[1])
-			elif message[0]=='accept_trigger':
+				eyelink.sendMessage(message[1])
+			elif message[0]=='acceptTrigger':
 				eyelink.accept_trigger()
 			elif message=='doCalibration':
 				doSounds = False
@@ -278,7 +282,19 @@ qTo
 					eyelink.stopRecording()
 				eyelink.doTrackerSetup()
 				qFrom.put('calibrationComplete')
-				eyelink.startRecording(1,1,1,1) #this retuns immediately takes 10-30ms to actually kick in on the tracker
+			elif message=='doDriftCorrect':
+				if eyelink.isRecording()==0:
+					eyelink.stopRecording()
+				try:
+					error = eyelink.doDriftCorrect(calibrationDisplayRes[0]/2,calibrationDisplayRes[1]/2,0,1)
+					# print error
+					if error != 27: 
+						qFrom.put('driftCorrectComplete')
+						eyelink.startRecording(1,1,1,1) #this retuns immediately takes 10-30ms to actually kick in on the tracker
+					else:
+						qFrom.put('doCalibration')
+				except:
+					qFrom.put('doCalibration')
 		if eyelink.isRecording()==0:
 			eyeData = eyelink.getNextData()
 			if doSounds:
