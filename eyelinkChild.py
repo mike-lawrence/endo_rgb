@@ -146,7 +146,7 @@ qTo
 	eyelink.setLinkEventFilter("SACCADE,BLINK")
 	eyelink.openDataFile(edfFileName)
 	eyelink.sendCommand("screen_pixel_coords =  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
-	eyelink.sendMessage("DISPLAY_COORDS  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
+	eyelink.edfEntry("DISPLAY_COORDS  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
 
 	#create saccade threshold settings
 	settingsDict = {}
@@ -175,7 +175,7 @@ qTo
 				self.__target_beep__error__.play()
 			else:#	CAL_GOOD_BEEP or DC_GOOD_BEEP
 				self.__target_beep__done__.play()
-		def clear_cal_display(self): 
+		def clear_cal_display(self):
 			sdl2.ext.fill(self.windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
 			self.window.refresh()
 			sdl2.ext.fill(self.windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
@@ -188,10 +188,10 @@ qTo
 			self.clear_cal_display()
 			for i in range(10):
 				sdl2.SDL_PumpEvents() #to show the windows
-		def exit_cal_display(self): 
+		def exit_cal_display(self):
 			sdl2.SDL_DestroyWindow(self.window.window)
 		def erase_cal_target(self):
-			self.clear_cal_display()		
+			self.clear_cal_display()
 		def draw_cal_target(self, x, y):
 			radius = self.targetSize/2
 			yy, xx = numpy.ogrid[-radius: radius, -radius: radius]
@@ -268,8 +268,8 @@ qTo
 				edfPath = message[1]
 			elif message[0]=='doSounds':
 				doSounds = message[1]
-			elif message[0]=='sendMessage':
-				eyelink.sendMessage(message[1])
+			elif message[0]=='edfEntry':
+				eyelink.edfEntry(message[1])
 			elif message[0]=='accept_trigger':
 				eyelink.accept_trigger()
 			elif message=='doCalibration':
