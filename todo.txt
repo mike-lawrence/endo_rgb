@@ -1,0 +1,7 @@
+fix trigger file
+fix too soon feedback
+fix arrow shape
+fix eyelink child window not fullscreen
+fix mouse cursor
+
+fix eyelink drift correct button advance
