@@ -1,7 +1,11 @@
 def writerChildFunction(
 qTo
-,qFrom
+, qFrom
+, windowSize = [200,200]
+, windowPosition = [0,0]
 ):
+	import sdl2
+	import sdl2.ext
 	import sys
 	import time
 	try:
@@ -9,6 +13,16 @@ qTo
 		appnope.nope()
 	except:
 		pass
+
+
+	byteify = lambda x, enc: x.encode(enc)
+
+	sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
+	window = sdl2.ext.Window("writer",size=windowSize,position=windowPosition,flags=sdl2.SDL_WINDOW_SHOWN)
+	windowID = sdl2.SDL_GetWindowID(window.window)
+	windowSurf = sdl2.SDL_GetWindowSurface(window.window)
+	sdl2.ext.fill(windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
+	window.refresh()
 
 	files = {}
 
@@ -22,6 +36,11 @@ qTo
 		sys.exit()
 
 	while True:
+		sdl2.SDL_PumpEvents()
+		for event in sdl2.ext.get_events():
+			if event.type==sdl2.SDL_WINDOWEVENT:
+				if (event.window.event==sdl2.SDL_WINDOWEVENT_CLOSE):
+					exitSafely()
 		if not qTo.empty():
 			message = qTo.get()
 			if message=='quit':

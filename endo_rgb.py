@@ -25,9 +25,16 @@ if __name__ == '__main__':
 	stimDisplayRes = (1280, 1024)
 	stimDisplayPosition=(0,0)
 
+	gamepadWindowSize = (100,100)
+	gamepadWindowPosition = (0,0)
+
+	writerWindowSize = (100,100)
+	writerWindowPosition = (100,0)
+
+
 	doEyelink = True
-	eyelinkWindowSize = (200,200)
-	eyelinkWindowPosition = (700,0)
+	eyelinkWindowSize = (100,100)
+	eyelinkWindowPosition = (200,0)
 	eyelinkIP = '100.1.1.1'
 	edfFileName = 'temp.edf'
 	edfPath = './'
@@ -168,12 +175,16 @@ if __name__ == '__main__':
 	# Initialize the writer
 	########
 	writerChild = fileForker.childClass(childFile='writerChild.py')
+	writerChild.initDict['windowSize'] = writerWindowSize
+	writerChild.initDict['windowPosition'] = writerWindowPosition
 	writerChild.start()
 
 	########
 	# start the event timestamper
 	########
 	gamepadChild = fileForker.childClass(childFile='gamepadChild.py')
+	gamepadChild.initDict['windowSize'] = gamepadWindowSize
+	gamepadChild.initDict['windowPosition'] = gamepadWindowPosition
 	gamepadChild.start()
 
 

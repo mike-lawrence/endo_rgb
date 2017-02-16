@@ -1,7 +1,11 @@
 def gamepadChildFunction(
 qTo
 , qFrom
+, windowSize = [200,200]
+, windowPosition = [0,0]
 ):
+	import sdl2
+	import sdl2.ext
 	import usb
 	import sys
 	import time
@@ -11,6 +15,19 @@ qTo
 		appnope.nope()
 	except:
 		pass
+
+	byteify = lambda x, enc: x.encode(enc)
+
+	sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
+	window = sdl2.ext.Window("gamepad",size=windowSize,position=windowPosition,flags=sdl2.SDL_WINDOW_SHOWN)
+	windowID = sdl2.SDL_GetWindowID(window.window)
+	windowSurf = sdl2.SDL_GetWindowSurface(window.window)
+	sdl2.ext.fill(windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
+	window.refresh()
+
+	for i in range(10):
+		sdl2.SDL_PumpEvents() #to show the windows
+
 	#find, claim & configure the gamepad
 	dev = usb.core.find(idVendor=1118, idProduct=654) #wired 360 gamepad
 	usb.util.claim_interface(dev, 0)
@@ -88,6 +105,11 @@ qTo
 				events.append(message)
 		return [events,buttonsDown]
 	while True:
+		sdl2.SDL_PumpEvents()
+		for event in sdl2.ext.get_events():
+			if event.type==sdl2.SDL_WINDOWEVENT:
+				if (event.window.event==sdl2.SDL_WINDOWEVENT_CLOSE):
+					sys.exit()
 		#check if there are any messages from the parent process
 		if not qTo.empty():
 			message = qTo.get()
