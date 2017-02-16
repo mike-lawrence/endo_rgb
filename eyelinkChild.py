@@ -1,15 +1,14 @@
-#    gaze = eyeEvent.getEndGaze()
-#AttributeError: StartSaccadeEvent instance has no attribute 'getEndGaze'
-
 def eyelinkChildFunction(
 qTo
 , qFrom
 , windowSize = [200,200]
 , windowPosition = [0,0]
-, calibrationDisplayRes = [1920,1080]
-, calibrationDisplayPosition = [1920,0]
+, stimDisplayRes = [1920,1080]
+, stimDisplayPosition = [1920,0]
+, calibrationDisplaySize = [1920,1080]
 , calibrationDotSize = 10
-, eyelinkIP = '100.1.1.1'
+, gazeTargetCriterion = 10
+, eyelinkIp = '100.1.1.1'
 , edfFileName = 'temp.edf'
 , edfPath = './_Data/temp.edf'
 , saccadeSoundFile = '_Stimuli/stop.wav'
@@ -17,6 +16,8 @@ qTo
 ):
 	import sdl2
 	import sdl2.ext
+	import math
+	import OpenGL.GL as gl
 	import sdl2.sdlmixer
 	import pylink
 	import numpy
@@ -25,21 +26,22 @@ qTo
 	import subprocess
 	import time
 	import os
+	import array
+	from PIL import Image
+	from PIL import ImageDraw
 	try:
 		import appnope
 		appnope.nope()
 	except:
 		pass
 
-	fontSize = 20
-	sdl2.sdlttf.TTF_Init()
-	font = sdl2.sdlttf.TTF_OpenFont('./_Stimuli/DejaVuSans.ttf', fontSize)
+	byteify = lambda x, enc: x.encode(enc)
 
 	sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
 	window = sdl2.ext.Window("eyelink",size=windowSize,position=windowPosition,flags=sdl2.SDL_WINDOW_SHOWN)
 	windowID = sdl2.SDL_GetWindowID(window.window)
 	windowSurf = sdl2.SDL_GetWindowSurface(window.window)
-	sdl2.ext.fill(windowSurf.contents,sdl2.pixels.SDL_Color(r=255, g=255, b=255, a=255))
+	sdl2.ext.fill(windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
 	window.refresh()
 
 	for i in range(10):
@@ -69,201 +71,229 @@ qTo
 	blinkSound = Sound(blinkSoundFile)
 
 	def exitSafely():
-		if 'eyelink'in locals():
-			if eyelink.isRecording():
+		if 'eyelink' in locals():
+			if eyelink.isRecording()==0:
 				eyelink.stopRecording()
 			eyelink.setOfflineMode()
 			eyelink.closeDataFile()
-			eyelink.receiveDataFile('temp.edf','temp.edf')
+			eyelink.receiveDataFile(edfFileName,'temp.edf')
 			eyelink.close()
 			if os.path.isfile('temp.edf'):
-				print 'temp.edf exists'
 				shutil.move('temp.edf', edfPath)
-				if os.path.isfile(edfPath):
-					print edfPath+' exists'
-					#subprocess.call('./edf2asc '+edfPath)
-		sys.exit()
-
-	#define a class for a clickable text UI
-	class clickableText:
-		def __init__(self,x,y,text,rightJustified=False,valueText=''):
-			self.x = x
-			self.y = y
-			self.text = text
-			self.rightJustified = rightJustified
-			self.valueText = valueText
-			self.isActive = False
-			self.clicked = False
-			self.updateSurf()
-		def updateSurf(self):
-			if self.isActive:
-				self.surf = sdl2.sdlttf.TTF_RenderText_Blended_Wrapped(font,self.text+self.valueText,sdl2.pixels.SDL_Color(r=0, g=255, b=255, a=255),window.size[0]).contents
-			else:
-				self.surf = sdl2.sdlttf.TTF_RenderText_Blended_Wrapped(font,self.text+self.valueText,sdl2.pixels.SDL_Color(r=0, g=0, b=255, a=255),window.size[0]).contents
-		def checkIfActive(self,event):
-			if self.rightJustified:
-				xLeft = self.x - self.surf.w
-				xRight = self.x
-			else:
-				xLeft = self.x
-				xRight = self.x + self.surf.w
-			if (event.button.x>xLeft) & (event.button.x<xRight) & (event.button.y>self.y) & (event.button.y<(self.y+fontSize)):
-				self.isActive = True
-			else:
-				self.isActive = False
-			self.updateSurf()
-		def draw(self,targetWindowSurf):
-			if self.rightJustified:
-				sdl2.SDL_BlitSurface(self.surf, None, targetWindowSurf, sdl2.SDL_Rect(self.x-self.surf.w,self.y,self.surf.w,self.surf.h))
-			else:
-				sdl2.SDL_BlitSurface(self.surf, None, targetWindowSurf, sdl2.SDL_Rect(self.x,self.y,self.surf.w,self.surf.h))
-
-	#define a class for settings
-	class settingText(clickableText):
-		def __init__(self,value,x,y,text,rightJustified=False):
-			self.value = value
-			self.valueText = str(value)
-			clickableText.__init__(self,x,y,text,rightJustified,self.valueText)
-		def addValue(self,toAdd):
-			self.valueText = self.valueText+toAdd
-			self.updateSurf()
-		def delValue(self):
-			if self.valueText!='':
-				self.valueText = self.valueText[0:(len(self.valueText)-1)]
-				self.updateSurf()
-		def finalizeValue(self):
-			try:
-				self.value = int(self.valueText)
-			except:
-				print 'Non-numeric value entered!'
-
+				# if os.path.isfile(edfPath):
+				# 	subprocess.call('./edf2asc -y ./'+edfPath,shell=True)
+		sys.exit() #process gets hung here if called when showing images from eyelink
 
 
 	edfPath = './_Data/temp.edf' #temporary default location, to be changed later when ID is established
-	eyelink = pylink.EyeLink(eyelinkIP)
+	done = False
+	while not done:
+		try:
+			print '\nAttempting to connect to eyelink (check that wifi is off!)'
+			eyelink = pylink.EyeLink(eyelinkIp)
+			done = True
+		except:
+			while not qTo.empty():
+				message = qTo.get()
+				if message=='quit':
+					exitSafely()
+				else:
+					qTo.put(message)
+
+	print 'Eyelink connected'
 	eyelink.sendCommand('select_parser_configuration 0')# 0--> standard (cognitive); 1--> sensitive (psychophysical)
-	eyelink.sendCommand('sample_rate 250')
-	eyelink.setLinkEventFilter("SACCADE,BLINK")
+	# eyelink.sendCommand('sample_rate 500')
+	eyelink.setLinkEventFilter("SACCADE,BLINK,FIXATION,LEFT,RIGHT")
 	eyelink.openDataFile(edfFileName)
-	eyelink.sendCommand("screen_pixel_coords =  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
-	eyelink.sendMessage("DISPLAY_COORDS  0 0 %d %d" %(calibrationDisplayRes[0],calibrationDisplayRes[1]))
-
-	#create saccade threshold settings
-	settingsDict = {}
-	settingsDict['velocity'] = settingText(value=30,x=fontSize,y=fontSize,text='Velocity = ')
-	settingsDict['accelleration'] = settingText(value=9500,x=fontSize,y=fontSize*2,text='Accelleration = ')
-	settingsDict['distance'] = settingText(value=0.15,x=fontSize,y=fontSize*3,text='Distance = ')
-
-
-	#send the initial settings
-	for setting in settingsDict:
-		eyelink.sendCommand("saccade_"+setting+"_threshold =%d"%(settingsDict[setting].value))
-
+	eyelink.sendCommand("screen_pixel_coords =  %d %d %d %d" %(stimDisplayRes[0]/2 - calibrationDisplaySize[0]/2 , stimDisplayRes[1]/2 - calibrationDisplaySize[1]/2 , stimDisplayRes[0]/2 + calibrationDisplaySize[0]/2 , stimDisplayRes[1]/2 + calibrationDisplaySize[1]/2 ))
+	eyelink.sendMessage("DISPLAY_COORDS  0 0 %d %d" %(stimDisplayRes[0],stimDisplayRes[1]))
+	# eyelink.sendCommand("saccade_velocity_threshold = 60")
+	# eyelink.sendCommand("saccade_acceleration_threshold = 19500")
 
 	class EyeLinkCoreGraphicsPySDL2(pylink.EyeLinkCustomDisplay):
-		def __init__(self,targetSize,windowSize,windowPosition):
-			self.targetSize = targetSize
-			self.windowPosition = windowPosition
-			self.windowSize = windowSize
+		def __init__(self):
 			self.__target_beep__ = Sound('_Stimuli/type.wav')
 			self.__target_beep__done__ = Sound('qbeep.wav')
 			self.__target_beep__error__ = Sound('error.wav')
+			if sys.byteorder == 'little':
+				self.byteorder = 1
+			else:
+				self.byteorder = 0
+			self.imagebuffer = array.array('I')
+			self.pal = None
+			self.__img__ = None
+		def record_abort_hide(self):
+			pass
 		def play_beep(self,beepid):
-			if beepid == pylink.DC_TARG_BEEP or beepid == pylink.CAL_TARG_BEEP:
+			# if beepid == pylink.DC_TARG_BEEP or beepid == pylink.CAL_TARG_BEEP:
+			if beepid == pylink.CAL_TARG_BEEP:
 				self.__target_beep__.play()
 			elif beepid == pylink.CAL_ERR_BEEP or beepid == pylink.DC_ERR_BEEP:
 				self.__target_beep__error__.play()
 			else:#	CAL_GOOD_BEEP or DC_GOOD_BEEP
 				self.__target_beep__done__.play()
 		def clear_cal_display(self):
-			sdl2.ext.fill(self.windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
-			self.window.refresh()
-			sdl2.ext.fill(self.windowSurf.contents,sdl2.pixels.SDL_Color(r=0, g=0, b=0, a=255))
-			sdl2.SDL_PumpEvents()
+			# print 'clear_cal_display'
+			qFrom.put('clearCalDisplay')
 		def setup_cal_display(self):
-			self.window = sdl2.ext.Window("Calibration",size=self.windowSize,position=self.windowPosition,flags=sdl2.SDL_WINDOW_SHOWN|sdl2.SDL_WINDOW_BORDERLESS)
-			self.windowID = sdl2.SDL_GetWindowID(self.window.window)
-			self.windowSurf = sdl2.SDL_GetWindowSurface(self.window.window)
-			self.windowArray = sdl2.ext.pixels3d(self.windowSurf.contents)
-			self.clear_cal_display()
-			for i in range(10):
-				sdl2.SDL_PumpEvents() #to show the windows
+			# print 'setup_cal_display'
+			qFrom.put('setupCalCisplay')
 		def exit_cal_display(self):
-			sdl2.SDL_DestroyWindow(self.window.window)
+			# print 'exit_cal_display'
+			qFrom.put('exitCalCisplay')
 		def erase_cal_target(self):
-			self.clear_cal_display()
+			# print 'erase_cal_target'
+			qFrom.put('eraseCalTarget')
 		def draw_cal_target(self, x, y):
-			radius = self.targetSize/2
-			yy, xx = numpy.ogrid[-radius: radius, -radius: radius]
-			index = numpy.logical_and( (xx**2 + yy**2) <= (radius**2) , (xx**2 + yy**2) >= ((radius/4)**2) )
-			self.windowArray[ (x-radius):(x+radius) , (y-radius):(y+radius) ,  ][index] = [200,200,200,255]
-			self.window.refresh()
-			sdl2.SDL_PumpEvents()
+			# print 'draw_cal_target'
+			qFrom.put(['drawCalTarget',x,y])
+		def setup_image_display(self, width, height):
+			# print 'eyelink: setup_image_display'
+			self.img_size = (width,height)
+			return 0
+		def exit_image_display(self):
+			# print 'eyelink: exit_image_display'
+			pass
+		def image_title(self,text):
+			# print 'eyelink: image_title'
+			pass
+		def set_image_palette(self, r,g,b):
+			# print 'eyelink: set_image_palette'
+			self.imagebuffer = array.array('I')
+			sz = len(r)
+			i = 0
+			self.pal = []
+			while i < sz:
+				rf = int(b[i])
+				gf = int(g[i])
+				bf = int(r[i])
+				if self.byteorder:
+					self.pal.append((rf<<16) | (gf<<8) | (bf))
+				else:
+					self.pal.append((bf<<24) |  (gf<<16) | (rf<<8)) #for mac
+				i = i+1
+		def draw_image_line(self, width, line, totlines,buff):
+			# print 'eyelink: draw_image_line'
+			i = 0
+			while i < width:
+				if buff[i]>=len(self.pal):
+					buff[i] = len(self.pal)-1
+				self.imagebuffer.append(self.pal[buff[i]&0x000000FF])
+				i = i+1
+			if line == totlines:
+				img = Image.fromstring('RGBX', (width,totlines), self.imagebuffer.tostring())
+ 				img = img.convert('RGBA')
+				self.__img__ = img.copy()
+				self.__draw__ = ImageDraw.Draw(self.__img__)
+				self.draw_cross_hair() #inherited method, calls draw_line and draw_losenge
+				qFrom.put(['image',numpy.array(self.__img__)])
+				self.__img__ = None
+				self.__draw__ = None
+				self.imagebuffer = array.array('I')
+		def get_color_from_index(self,colorindex):
+			if colorindex   ==  pylink.CR_HAIR_COLOR:          return (255,255,255,255)
+			elif colorindex ==  pylink.PUPIL_HAIR_COLOR:       return (255,255,255,255)
+			elif colorindex ==  pylink.PUPIL_BOX_COLOR:        return (0,255,0,255)
+			elif colorindex ==  pylink.SEARCH_LIMIT_BOX_COLOR: return (255,0,0,255)
+			elif colorindex ==  pylink.MOUSE_CURSOR_COLOR:     return (255,0,0,255)
+			else: return (0,0,0,0)
+		def draw_line(self,x1,y1,x2,y2,colorindex):
+			# print 'eyelink: draw_line'
+			if x1<0: x1 = 0
+			if x2<0: x2 = 0
+			if y1<0: y1 = 0
+			if y2<0: y2 = 0
+			if x1>self.img_size[0]: x1 = self.img_size[0]
+			if x2>self.img_size[0]: x2 = self.img_size[0]
+			if y1>self.img_size[1]: y1 = self.img_size[1]
+			if y2>self.img_size[1]: y2 = self.img_size[1]
+			imr = self.__img__.size
+			x1 = int((float(x1)/float(self.img_size[0]))*imr[0])
+			x2 = int((float(x2)/float(self.img_size[0]))*imr[0])
+			y1 = int((float(y1)/float(self.img_size[1]))*imr[1])
+			y2 = int((float(y2)/float(self.img_size[1]))*imr[1])
+			color = self.get_color_from_index(colorindex)
+			self.__draw__.line( [(x1,y1),(x2,y2)] , fill=color)
+		def draw_lozenge(self,x,y,width,height,colorindex):
+			# print 'eyelink: draw_lozenge'
+			color = self.get_color_from_index(colorindex)
+			imr = self.__img__.size
+			x=int((float(x)/float(self.img_size[0]))*imr[0])
+			width=int((float(width)/float(self.img_size[0]))*imr[0])
+			y=int((float(y)/float(self.img_size[1]))*imr[1])
+			height=int((float(height)/float(self.img_size[1]))*imr[1])
+			if width>height:
+				rad = height/2
+				self.__draw__.line([(x+rad,y),(x+width-rad,y)],fill=color)
+				self.__draw__.line([(x+rad,y+height),(x+width-rad,y+height)],fill=color)
+				clip = (x,y,x+height,y+height)
+				self.__draw__.arc(clip,90,270,fill=color)
+				clip = ((x+width-height),y,x+width,y+height)
+				self.__draw__.arc(clip,270,90,fill=color)
+			else:
+				rad = width/2
+				self.__draw__.line([(x,y+rad),(x,y+height-rad)],fill=color)
+				self.__draw__.line([(x+width,y+rad),(x+width,y+height-rad)],fill=color)
+				clip = (x,y,x+width,y+width)
+				self.__draw__.arc(clip,180,360,fill=color)
+				clip = (x,y+height-width,x+width,y+height)
+				self.__draw__.arc(clip,360,180,fill=color)
+		def get_mouse_state(self):
+			# pos = pygame.mouse.get_pos()
+			# state = pygame.mouse.get_pressed()
+			# return (pos,state[0])
+			pass
 		def get_input_key(self):
-			sdl2.SDL_PumpEvents()
-			return None
-		def get_input_key(self):
-			if not qTo.empty():
-				if message[0]=='acceptTrigger':
-					eyelink.accept_trigger()			
-			# tracker_mode = self.tracker.getTrackerMode()
-			sdl2.SDL_PumpEvents()
-			for event in sdl2.ext.get_events():
-				if event.type == sdl2.SDL_KEYDOWN:
-					keysym = event.key.keysym
-					# if keysym.sym == sdl2.SDLK_ESCAPE:  # don't allow escape to control tracker unless calibrating
-					# 	if tracker_mode in [pylink.EL_VALIDATE_MODE, pylink.EL_CALIBRATE_MODE]:
-					# 		return [pylink.KeyInput(sdl2.SDLK_ESCAPE, 0)]
-					# 	else:
-					# 		return False
-					print [keysym.sym,keysym.mod,pylink.KeyInput(keysym.sym, keysym.mod)]
-					return [pylink.KeyInput(keysym.sym, keysym.mod)]
-			return None
+			ky=[]
+			while not qTo.empty():
+				message = qTo.get()
+				if message=='quit':
+					print 'received message to exit'
+					exitSafely()
+				elif message=='voice':
+					ky.append(pylink.KeyInput(32,0)) #voicekey response translated to space keypress (for drift correct)
+				elif message[0]=='keycode':
+					keysym = message[1]
+					keycode = keysym.sym
+					if keycode == sdl2.SDLK_F1:           keycode = pylink.F1_KEY
+					elif keycode == sdl2.SDLK_F2:         keycode = pylink.F2_KEY
+					elif keycode == sdl2.SDLK_F3:         keycode = pylink.F3_KEY
+					elif keycode == sdl2.SDLK_F4:         keycode = pylink.F4_KEY
+					elif keycode == sdl2.SDLK_F5:         keycode = pylink.F5_KEY
+					elif keycode == sdl2.SDLK_F6:         keycode = pylink.F6_KEY
+					elif keycode == sdl2.SDLK_F7:         keycode = pylink.F7_KEY
+					elif keycode == sdl2.SDLK_F8:         keycode = pylink.F8_KEY
+					elif keycode == sdl2.SDLK_F9:         keycode = pylink.F9_KEY
+					elif keycode == sdl2.SDLK_F10:        keycode = pylink.F10_KEY
+					elif keycode == sdl2.SDLK_PAGEUP:     keycode = pylink.PAGE_UP
+					elif keycode == sdl2.SDLK_PAGEDOWN:   keycode = pylink.PAGE_DOWN
+					elif keycode == sdl2.SDLK_UP:         keycode = pylink.CURS_UP
+					elif keycode == sdl2.SDLK_DOWN:       keycode = pylink.CURS_DOWN
+					elif keycode == sdl2.SDLK_LEFT:       keycode = pylink.CURS_LEFT
+					elif keycode == sdl2.SDLK_RIGHT:      keycode = pylink.CURS_RIGHT
+					elif keycode == sdl2.SDLK_BACKSPACE:  keycode = ord('\b')
+					elif keycode == sdl2.SDLK_RETURN:     keycode = pylink.ENTER_KEY
+					elif keycode == sdl2.SDLK_ESCAPE:     keycode = pylink.ESC_KEY
+					elif keycode == sdl2.SDLK_TAB:        keycode = ord('\t')
+					elif keycode == pylink.JUNK_KEY:      keycode = 0
+					ky.append(pylink.KeyInput(keycode,keysym.mod))
+			return ky
 
-	customDisplay = EyeLinkCoreGraphicsPySDL2(targetSize=calibrationDotSize,windowSize=calibrationDisplayRes,windowPosition=calibrationDisplayPosition)
+	customDisplay = EyeLinkCoreGraphicsPySDL2()
 	pylink.openGraphicsEx(customDisplay)
-
+	newGazeTarget = False
+	gazeTarget = numpy.array(calibrationDisplaySize)/2.0
 	doSounds = False
+	reportSaccades = False
+	reportBlinks = False
+	lastMessageTime = time.time()
+	lastStartBlinkTime = time.time()
 	while True:
 		sdl2.SDL_PumpEvents()
 		for event in sdl2.ext.get_events():
 			if event.type==sdl2.SDL_WINDOWEVENT:
 				if (event.window.event==sdl2.SDL_WINDOWEVENT_CLOSE):
 					exitSafely()
-			elif event.type==sdl2.SDL_MOUSEMOTION:
-				alreadyClicked = False
-				for setting in settingsDict:
-					if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
-						alreadyClicked = True
-				if not alreadyClicked:
-					for setting in settingsDict:
-						settingsDict[setting].checkIfActive(event)
-			elif event.type==sdl2.SDL_MOUSEBUTTONDOWN:
-				alreadyClicked = False
-				for setting in settingsDict:
-					if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
-						alreadyClicked = True
-				if not alreadyClicked:
-					for setting in settingsDict:
-						if settingsDict[setting].isActive:
-							settingsDict[setting].clicked = True
-			elif event.type==sdl2.SDL_KEYDOWN:
-				key = sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()
-				if key == 'backspace':
-					for setting in settingsDict:
-						if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
-							settingsDict[setting].delValue()
-				elif key=='return':
-					for setting in settingsDict:
-						if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
-							settingsDict[setting].finalizeValue()
-							eyelink.sendCommand("saccade_"+setting+"_threshold =%d"%(settingsDict[setting].value))
-							settingsDict[setting].clicked = False
-				else:
-					for setting in settingsDict:
-						if (settingsDict[setting].isActive) and (settingsDict[setting].clicked):
-							settingsDict[setting].addValue(key)
-
 		if not qTo.empty():
 			message = qTo.get()
 			if message=='quit':
@@ -272,43 +302,96 @@ qTo
 				edfPath = message[1]
 			elif message[0]=='doSounds':
 				doSounds = message[1]
+			elif message[0]=='reportSaccades':
+				reportSaccades = message[1]
+			elif message[0]=='reportBlinks':
+				reportBlinks = message[1]
 			elif message[0]=='edfEntry':
 				eyelink.sendMessage(message[1])
-			elif message[0]=='acceptTrigger':
-				eyelink.accept_trigger()
-			elif message=='doCalibration':
-				doSounds = False
-				if eyelink.isRecording():
-					eyelink.stopRecording()
-				eyelink.doTrackerSetup()
-				qFrom.put('calibrationComplete')
 			elif message=='doDriftCorrect':
 				if eyelink.isRecording()==0:
 					eyelink.stopRecording()
 				try:
-					error = eyelink.doDriftCorrect(calibrationDisplayRes[0]/2,calibrationDisplayRes[1]/2,0,1)
+					error = eyelink.doDriftCorrect(stimDisplayRes[0]/2,stimDisplayRes[1]/2,0,1)
 					# print error
-					if error != 27: 
+					if error != 27:
 						qFrom.put('driftCorrectComplete')
 						eyelink.startRecording(1,1,1,1) #this retuns immediately takes 10-30ms to actually kick in on the tracker
 					else:
 						qFrom.put('doCalibration')
 				except:
 					qFrom.put('doCalibration')
-		if eyelink.isRecording()==0:
+			elif message[0]=='newGazeTarget':
+				# print message
+				newGazeTarget = True
+				gazeTarget = numpy.array(message[1])
+				gazeTargetCriterion = numpy.array(message[2])
+				# print message
+				# print 'waiting for gaze confirmation'
+			elif message[0]=='acceptTrigger':
+				eyelink.accept_trigger()
+			elif message=='doCalibration':
+				doSounds = False
+				if eyelink.isRecording()==0:
+					eyelink.stopRecording()
+				eyelink.doTrackerSetup()
+				qFrom.put('calibrationComplete')
+		if eyelink.isRecording()==0: #stupid, I know, but eyelink.isRecording() returns 0 if it *is* indeed recording!
 			eyeData = eyelink.getNextData()
-			if doSounds:
-				if (eyeData==pylink.STARTSACC) or (eyeData==pylink.STARTBLINK):
-					eyeEvent = eyelink.getFloatData()
-					if isinstance(eyeEvent,pylink.StartSaccadeEvent):
-						gaze = eyeEvent.getEndGaze()
-						distFromFixation = numpy.linalg.norm(numpy.array(gaze)-numpy.array(calibrationDisplayRes)/2)
-						print [gaze,distFromFixation,calibrationDotSize]
-						if distFromFixation>calibrationDotSize:
+			# if eyeData==pylink.SAMPLE_TYPE:
+			# 	eyeSample = eyelink.getFloatData()
+			# 	gaze = None
+			# 	if eyeSample.isRightSample():
+			# 		gaze = eyeSample.getRightEye().getGaze()
+			# 	elif eyeSample.isLeftSample():
+			# 		gaze = eyeSample.getLeftEye().getGaze()
+			# 	if gaze!=None:
+			# 		if gaze[0]!=-32768.0:
+			# 			gazeDistFromGazeTarget = numpy.linalg.norm(numpy.array(gaze)-gazeTarget)
+			# 			if newGazeTarget:
+			# 				if gazeDistFromGazeTarget<gazeTargetCriterion:
+			# 					print ['gazeTargetMet',gaze,gazeTargetCriterion,gazeTarget,gazeDistFromGazeTarget]
+			# 					qFrom.put(['gazeTargetMet',gazeTarget])
+			# 					newGazeTarget = False
+			# 				else:
+			# 					qFrom.put(['gazeTargetNotMet',gazeTarget])
+			# 					print ['gazeTargetNotMet',gaze,gazeTarget,gazeDistFromGazeTarget,gazeTargetCriterion]
+			if eyeData==pylink.ENDSACC:
+				eyeSample = eyelink.getFloatData()
+				gazeStart = eyeSample.getStartGaze()
+				gazeEnd = eyeSample.getEndGaze()
+				# print ['eyelink: saccade',gazeStart,gazeEnd,gazeTarget]
+				if (gazeStart[0]!=-32768.0) & (gazeEnd[0]!=-32768.0):
+					gazeDistFromGazeTarget = numpy.linalg.norm(numpy.array(gazeEnd)-gazeTarget)
+					# print ['distance', gazeDistFromGazeTarget]
+					# print ['criterion', gazeTargetCriterion]
+					if gazeDistFromGazeTarget<1000:
+						if newGazeTarget:
+							if gazeDistFromGazeTarget<gazeTargetCriterion:
+								qFrom.put(['gazeTargetMet',gazeTarget])
+								newGazeTarget = False
+						elif gazeDistFromGazeTarget>gazeTargetCriterion:
+							if reportSaccades:
+								qFrom.put('gazeTarget_lost')
+								# print ['gaze target lost']
 							if (not saccadeSound.stillPlaying()) and (not blinkSound.stillPlaying()):
-								saccadeSound.play()
-					elif isinstance(eyeEvent,pylink.StartBlinkEvent):
-						if (not saccadeSound.stillPlaying()) and (not blinkSound.stillPlaying()):
+								if doSounds:
+									saccadeSound.play()
+						else:
+							if reportSaccades:
+								qFrom.put(['smallerSaccade',gazeDistFromGazeTarget,])
+								#print ['smallerSaccade',gazeDistFromGazeTarget]
+			elif eyeData==pylink.STARTBLINK:
+				lastStartBlinkTime = time.time()
+			elif eyeData==pylink.ENDBLINK:
+				if (time.time()-lastStartBlinkTime)>.1:
+					if reportBlinks:
+						qFrom.put('blink')
+						#print 'eyelink: blink'
+					if (not saccadeSound.stillPlaying()) and (not blinkSound.stillPlaying()):
+						if doSounds:
 							blinkSound.play()
+
+
 
 eyelinkChildFunction(qTo,qFrom,**initDict)
