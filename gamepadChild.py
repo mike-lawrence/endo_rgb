@@ -109,18 +109,19 @@ qTo
 		for event in sdl2.ext.get_events():
 			if event.type==sdl2.SDL_WINDOWEVENT:
 				if (event.window.event==sdl2.SDL_WINDOWEVENT_CLOSE):
+					usb.util.release_interface(dev, 0)
 					sys.exit()
 		#check if there are any messages from the parent process
 		if not qTo.empty():
 			message = qTo.get()
 			if message=='quit':
-				# usb.util.release_interface(dev, 0)
+				usb.util.release_interface(dev, 0)
 				sys.exit()
 		#get the current time
 		now = time.time()
 		#check if there's any data from the gamepad
 		try:
-			data = dev.read(readEP.bEndpointAddress,readEP.wMaxPacketSize,0)
+			data = dev.read(readEP.bEndpointAddress,readEP.wMaxPacketSize,1)
 		except usb.core.USBError as e:
 			data = None
 			if e.args == ('Operation timed out',):
@@ -170,7 +171,6 @@ qTo
 				lastData = data
 
 gamepadChildFunction(qTo,qFrom,**initDict)
-
 
 """
 Results from exploring the output from the gamepad:
