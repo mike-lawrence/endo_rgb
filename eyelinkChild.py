@@ -5,9 +5,9 @@ qTo
 , windowPosition = [0,0]
 , stimDisplayRes = [1920,1080]
 , stimDisplayPosition = [1920,0]
-, calibrationDisplaySize = [1920,1080]
+, calibrationDisplayRes = [1920,1080]
 , calibrationDotSize = 10
-, gazeTargetCriterion = 10
+, gazeTargetCriterion = 100
 , eyelinkIp = '100.1.1.1'
 , edfFileName = 'temp.edf'
 , edfPath = './_Data/temp.edf'
@@ -80,8 +80,8 @@ qTo
 			eyelink.close()
 			if os.path.isfile('temp.edf'):
 				shutil.move('temp.edf', edfPath)
-				# if os.path.isfile(edfPath):
-				# 	subprocess.call('./edf2asc -y ./'+edfPath,shell=True)
+				if os.path.isfile(edfPath):
+					subprocess.call('./edf2asc -y ./'+edfPath,shell=True)
 		sys.exit() #process gets hung here if called when showing images from eyelink
 
 
@@ -100,12 +100,13 @@ qTo
 				else:
 					qTo.put(message)
 
+	qFrom.put('connected')
 	print 'Eyelink connected'
 	eyelink.sendCommand('select_parser_configuration 0')# 0--> standard (cognitive); 1--> sensitive (psychophysical)
-	# eyelink.sendCommand('sample_rate 500')
+	eyelink.sendCommand('sample_rate 250')
 	eyelink.setLinkEventFilter("SACCADE,BLINK,FIXATION,LEFT,RIGHT")
 	eyelink.openDataFile(edfFileName)
-	eyelink.sendCommand("screen_pixel_coords =  %d %d %d %d" %(stimDisplayRes[0]/2 - calibrationDisplaySize[0]/2 , stimDisplayRes[1]/2 - calibrationDisplaySize[1]/2 , stimDisplayRes[0]/2 + calibrationDisplaySize[0]/2 , stimDisplayRes[1]/2 + calibrationDisplaySize[1]/2 ))
+	eyelink.sendCommand("screen_pixel_coords =  %d %d %d %d" %(stimDisplayRes[0]/2 - calibrationDisplayRes[0]/2 , stimDisplayRes[1]/2 - calibrationDisplayRes[1]/2 , stimDisplayRes[0]/2 + calibrationDisplayRes[0]/2 , stimDisplayRes[1]/2 + calibrationDisplayRes[1]/2 ))
 	eyelink.sendMessage("DISPLAY_COORDS  0 0 %d %d" %(stimDisplayRes[0],stimDisplayRes[1]))
 	# eyelink.sendCommand("saccade_velocity_threshold = 60")
 	# eyelink.sendCommand("saccade_acceleration_threshold = 19500")
@@ -137,10 +138,10 @@ qTo
 			qFrom.put('clearCalDisplay')
 		def setup_cal_display(self):
 			# print 'setup_cal_display'
-			qFrom.put('setupCalCisplay')
+			qFrom.put('setupCalDisplay')
 		def exit_cal_display(self):
 			# print 'exit_cal_display'
-			qFrom.put('exitCalCisplay')
+			qFrom.put('exitCalDisplay')
 		def erase_cal_target(self):
 			# print 'erase_cal_target'
 			qFrom.put('eraseCalTarget')
@@ -181,7 +182,7 @@ qTo
 				self.imagebuffer.append(self.pal[buff[i]&0x000000FF])
 				i = i+1
 			if line == totlines:
-				img = Image.fromstring('RGBX', (width,totlines), self.imagebuffer.tostring())
+				img = Image.frombytes('RGBX', (width,totlines), self.imagebuffer.tostring())
  				img = img.convert('RGBA')
 				self.__img__ = img.copy()
 				self.__draw__ = ImageDraw.Draw(self.__img__)
@@ -250,8 +251,9 @@ qTo
 				if message=='quit':
 					print 'received message to exit'
 					exitSafely()
-				elif message=='voice':
-					ky.append(pylink.KeyInput(32,0)) #voicekey response translated to space keypress (for drift correct)
+				elif message=='go':
+					#print 'eyelinkChild: go'
+					ky.append(pylink.KeyInput(32,0)) #translated to space keypress (for drift correct)
 				elif message[0]=='keycode':
 					keysym = message[1]
 					keycode = keysym.sym
@@ -282,7 +284,7 @@ qTo
 	customDisplay = EyeLinkCoreGraphicsPySDL2()
 	pylink.openGraphicsEx(customDisplay)
 	newGazeTarget = False
-	gazeTarget = numpy.array(calibrationDisplaySize)/2.0
+	gazeTarget = numpy.array(calibrationDisplayRes)/2.0
 	doSounds = False
 	reportSaccades = False
 	reportBlinks = False
@@ -330,7 +332,7 @@ qTo
 				# print 'waiting for gaze confirmation'
 			elif message[0]=='acceptTrigger':
 				eyelink.accept_trigger()
-			elif message=='doCalibration':
+			elif message=='startingCalibration':
 				doSounds = False
 				if eyelink.isRecording()==0:
 					eyelink.stopRecording()
@@ -372,7 +374,7 @@ qTo
 								newGazeTarget = False
 						elif gazeDistFromGazeTarget>gazeTargetCriterion:
 							if reportSaccades:
-								qFrom.put('gazeTarget_lost')
+								qFrom.put('gazeTargetLost')
 								# print ['gaze target lost']
 							if (not saccadeSound.stillPlaying()) and (not blinkSound.stillPlaying()):
 								if doSounds:

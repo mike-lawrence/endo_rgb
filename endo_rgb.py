@@ -25,17 +25,17 @@ if __name__ == '__main__':
 	stimDisplayRes = (1280, 1024)
 	stimDisplayPosition=(0,0)
 
-	gamepadWindowSize = (100,100)
+	gamepadWindowSize = (200,100)
 	gamepadWindowPosition = (0,0)
 
-	writerWindowSize = (100,100)
-	writerWindowPosition = (100,0)
+	writerWindowSize = (200,100)
+	writerWindowPosition = (0,200)
 
 
-	doEyelink = True
-	eyelinkWindowSize = (100,100)
-	eyelinkWindowPosition = (200,0)
-	eyelinkIP = '100.1.1.1'
+	doEyelink = False
+	eyelinkWindowSize = (200,100)
+	eyelinkWindowPosition = (0,400)
+	eyelinkIp = '100.1.1.1'
 	edfFileName = 'temp.edf'
 	edfPath = './'
 	saccadeSoundFile = '_Stimuli/stop.wav'
@@ -132,7 +132,7 @@ if __name__ == '__main__':
 	########
 	stimDisplayWidthInDegrees = math.degrees(math.atan((stimDisplayWidth/2.0)/viewingDistance)*2)
 	PPD = stimDisplayRes[0]/stimDisplayWidthInDegrees #compute the pixels per degree (PPD)
-
+	print PPD
 	calibrationDotSize = int(calibrationDotSizeInDegrees*PPD)
 	instructionSize = int(instructionSizeInDegrees*PPD)
 	feedbackSize = int(feedbackSizeInDegrees*PPD)
@@ -195,23 +195,23 @@ if __name__ == '__main__':
 		eyelinkChild = fileForker.childClass(childFile='eyelinkChild.py')
 		eyelinkChild.initDict['windowSize'] = eyelinkWindowSize
 		eyelinkChild.initDict['windowPosition'] = eyelinkWindowPosition
-		eyelinkChild.initDict['calibrationDisplayPosition'] = stimDisplayPosition
+		eyelinkChild.initDict['stimDisplayRes'] = stimDisplayRes
+		eyelinkChild.initDict['stimDisplayPosition'] = stimDisplayPosition
 		eyelinkChild.initDict['calibrationDisplayRes'] = stimDisplayRes
 		eyelinkChild.initDict['calibrationDotSize'] = calibrationDotSize
-		eyelinkChild.initDict['eyelinkIP'] = eyelinkIP
+		eyelinkChild.initDict['gazeTargetCriterion'] = PPD*2
+		eyelinkChild.initDict['eyelinkIp'] = eyelinkIp
 		eyelinkChild.initDict['edfFileName'] = edfFileName
 		eyelinkChild.initDict['edfPath'] = edfPath
 		eyelinkChild.initDict['saccadeSoundFile'] = saccadeSoundFile
 		eyelinkChild.initDict['blinkSoundFile'] = blinkSoundFile
 		eyelinkChild.start()
-		eyelinkChild.qTo.put('doCalibration')
 		done = False
 		while not done:
-			if not eyelinkChild.qFrom.empty():
+			while not eyelinkChild.qFrom.empty():
 				message = eyelinkChild.qFrom.get()
-				if message=='calibrationComplete':
+				if message=='connected':
 					done = True
-
 	########
 	# Initialize the stimDisplay
 	########
@@ -245,14 +245,12 @@ if __name__ == '__main__':
 			sdl2.SDL_DestroyWindow(self.Window.window)
 			return None
 
-
+	time.sleep(2)
 	stimDisplay = stimDisplayClass()
 	stimDisplay.show(stimDisplayRes=stimDisplayRes,stimDisplayPosition=stimDisplayPosition)
-
+	sdl2.mouse.SDL_ShowCursor(0)
 	for i in range(10):
 		sdl2.SDL_PumpEvents() #to show the windows
-
-
 
 
 
@@ -385,14 +383,14 @@ if __name__ == '__main__':
 			directionMultiplier = -1
 		gl.glColor3ub(127,127,127)
 		gl.glBegin(gl.GL_POLYGON)
-		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5*4)*directionMultiplier , stimDisplayRes[1]/2 )
-		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/4)
-		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/10)
-		gl.glVertex2f( stimDisplayRes[0]/2 + (arrowSize/5*4)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/10)
-		gl.glVertex2f( stimDisplayRes[0]/2 + (arrowSize/5*4)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/10)
-		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/10)
-		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/4)
-		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/5*4)*directionMultiplier , stimDisplayRes[1]/2 )
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/3*2)*directionMultiplier , stimDisplayRes[1]/2 )
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/3)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/3)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/3)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/6)
+		gl.glVertex2f( stimDisplayRes[0]/2 + (arrowSize/3*2)*directionMultiplier , stimDisplayRes[1]/2 - arrowSize/6)
+		gl.glVertex2f( stimDisplayRes[0]/2 + (arrowSize/3*2)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/6)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/3)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/6)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/3)*directionMultiplier , stimDisplayRes[1]/2 + arrowSize/3)
+		gl.glVertex2f( stimDisplayRes[0]/2 - (arrowSize/3*2)*directionMultiplier , stimDisplayRes[1]/2 )
 		gl.glEnd()
 		gl.glColor3ub(0,0,0)
 		gl.glBegin(gl.GL_POLYGON)
@@ -568,14 +566,19 @@ if __name__ == '__main__':
 
 
 	def doCalibration():
-		drawDot(fixationSize)
-		stimDisplay.refresh()
-		eyelinkChild.qTo.put('doCalibration')
+		eyelinkChild.qTo.put('startingCalibration')
 		calibrationDone = False
 		while not calibrationDone:
+			#check for gamepad input
+			while not gamepadChild.qFrom.empty():
+				event = gamepadChild.qFrom.get()
+				if event['type'] == 'buttonDown':
+					#print 'main: button'
+					eyelinkChild.qTo.put('go')
+			sdl2.SDL_PumpEvents()
 			for event in sdl2.ext.get_events():
 				if event.type==sdl2.SDL_KEYDOWN:
-					if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
+					if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='q':
 						exitSafely()
 					else:
 						eyelinkChild.qTo.put(['keycode',event.key.keysym])
@@ -584,7 +587,7 @@ if __name__ == '__main__':
 				if message=='calibrationComplete':
 					calibrationDone = True
 				elif (message=='setupCalDisplay') or (message=='exitCalDisplay'):
-					drawDot(fixationSize)
+					drawDot(calibrationDotSize/2)
 					stimDisplay.refresh()
 				elif message=='eraseCalTarget':
 					pass
@@ -613,9 +616,9 @@ if __name__ == '__main__':
 	#define a function that will kill everything safely
 	def exitSafely():
 		writerChild.stop()
+		gamepadChild.stop(killAfter=2)
 		if doEyelink:
 			eyelinkChild.stop()
-		gamepadChild.stop(killAfter=1)
 		while gamepadChild.isAlive():
 			time.sleep(.1)
 		sdl2.ext.quit()
@@ -629,7 +632,7 @@ if __name__ == '__main__':
 			sdl2.SDL_PumpEvents()
 			for event in sdl2.ext.get_events():
 				if event.type==sdl2.SDL_KEYDOWN:
-					if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
+					if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='q':
 						exitSafely()
 					else:
 						done = True
@@ -682,7 +685,7 @@ if __name__ == '__main__':
 			for event in sdl2.ext.get_events():
 				if event.type==sdl2.SDL_KEYDOWN:
 					response = sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()
-					if response=='escape':
+					if response=='q':
 						exitSafely()
 					elif response == 'backspace':
 						if textInput!='':
@@ -742,19 +745,19 @@ if __name__ == '__main__':
 		return trials
 
 
-	#define a function to quit if escape is pressed
-	def checkEscape():
+	#define a function to quit if q is pressed
+	def checkQ():
 		sdl2.SDL_PumpEvents()
 		for event in sdl2.ext.get_events():
 			if event.type==sdl2.SDL_KEYDOWN:
-				if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
+				if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='q':
 					exitSafely()
 
 
 	#define a function that runs a block of trials
 	def runBlock():
 
-		print 'block started'
+		#print 'block started'
 
 		#get trials
 		trialList = getTrials()
@@ -781,12 +784,20 @@ if __name__ == '__main__':
 				stimDisplay.refresh()
 				outerDone = False
 				while not outerDone:
+					sdl2.SDL_PumpEvents()
 					drawCalTarget()
 					stimDisplay.refresh()
 					outerDone = True #set to False below if need to re-do drift correct after re-calibration
 					eyelinkChild.qTo.put('doDriftCorrect')
 					innerDone = False
+					#check for gamepad input
+					while not gamepadChild.qFrom.empty():
+						event = gamepadChild.qFrom.get()
+						if event['type'] == 'buttonDown':
+							#print 'main: button'
+							eyelinkChild.qTo.put('go')
 					while not innerDone:
+						sdl2.SDL_PumpEvents()
 						while not eyelinkChild.qFrom.empty():
 							message = eyelinkChild.qFrom.get()
 							if message=='driftCorrectComplete':
@@ -797,19 +808,19 @@ if __name__ == '__main__':
 								outerDone = False
 						for event in sdl2.ext.get_events():
 							if event.type==sdl2.SDL_KEYDOWN:
-								if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='escape':
+								if sdl2.SDL_GetKeyName(event.key.keysym.sym).lower()=='q':
 									exitSafely()
 								else:
 									eyelinkChild.qTo.put(['keycode',event.key.keysym])
-									print [sdl2.SDL_GetKeyName(event.key.keysym.sym).lower(),event.key.keysym]
 						#check for gamepad input
 						while not gamepadChild.qFrom.empty():
 							event = gamepadChild.qFrom.get()
-							if event['type'] == 'button':
-								eyelinkChild.qTo.put(['acceptTrigger'])
-
+							if event['type'] == 'buttonDown':
+								#print 'main: button'
+								eyelinkChild.qTo.put('go')
 				eyelinkChild.qTo.put(['reportBlinks',True])
 				eyelinkChild.qTo.put(['reportSaccades',True])
+				eyelinkChild.qTo.put(['doSounds',True])
 			trialInitiationTime = getTime() - start
 
 
@@ -853,6 +864,8 @@ if __name__ == '__main__':
 			rt = 'NA'
 			rtLeft = 'NA'
 			rtRight = 'NA'
+			pickerTime = 'NA'
+			colorChoice = 'NA'
 
 			biggestSmallSaccade = 0
 			blink = False
@@ -879,8 +892,8 @@ if __name__ == '__main__':
 						elif message[0]=='smallerSaccade':
 							if message[1]>biggestSmallSaccade:
 								biggestSmallSaccade = message[1]
-				#check for escape key pressed
-				checkEscape()
+				#check for q key pressed
+				checkQ()
 				#check for gamepad input
 				while not gamepadChild.qFrom.empty():
 					event = gamepadChild.qFrom.get()
@@ -930,15 +943,18 @@ if __name__ == '__main__':
 				rtRight = rtList['right'][-1]
 				feedbackText = str(int(rt*100)) #convert from seconds to hundredths of seconds
 			#show feedback
+			gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 			drawFeedback(feedbackText)
 			stimDisplay.refresh()
 			if doEyelink:
 				eyelinkChild.qTo.put(['edfEntry','feedbackOn\t'+trialDescriptor])
+				eyelinkChild.qTo.put(['reportBlinks',False])
+				eyelinkChild.qTo.put(['reportSaccades',False])
 				eyelinkChild.qTo.put(['doSounds',False])
 			trialDone = False
 			while getTime()<(trialDoneTime+feedbackDuration):
-				#check for escape key pressed
-				checkEscape()
+				#check for q key pressed
+				checkQ()
 				#check for gamepad input
 				while not gamepadChild.qFrom.empty():
 					event = gamepadChild.qFrom.get()
@@ -948,63 +964,64 @@ if __name__ == '__main__':
 						if event['value']>=triggerCriterionValue:
 							if triggerData[event['side']][-1]['value']<triggerCriterionValue:
 								feedbackResponse = True
-			#Do color wheel here
-			wheelRotation = drawWheel()
-			pickerX,pickerY = [0,0]
-			pickerDrawX,pickerDrawY = [0,0]
-			stimDisplay.refresh()
-			pickerStart = getTime()
-			doPicker = False
-			done = False
-			while not done:
-				#check for escape key pressed
-				checkEscape()
-				#check for gamepad input
-				while (not gamepadChild.qFrom.empty()) and ((getTime()-stimDisplay.lastUpdate)<.01):
-					event = gamepadChild.qFrom.get()
-					if event['type'] == 'stick':
-						if event['side']=='right':
-							pickerX,pickerY = event['value']
-							pickerY = -pickerY
-							magnitude = math.sqrt(pickerX**2+pickerY**2)
-							if magnitude>(255/3.0):
-								doPicker=True
-								if pickerX==0:
-									pickerDrawX = 0
-									if pickerY>0:
-										pickerDrawY = (wheelSize-(wheelSize-wheelSize*.9)/2.0)
-									else:
-										pickerDrawY = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)
-								elif pickerY==0:
-									pickerDrawY = 0
-									if pickerX>0:
-										pickerDrawX = (wheelSize-(wheelSize-wheelSize*.9)/2.0)
-									else:
-										pickerDrawX = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)
-								else:
-									angle = math.atan((pickerY*1.0)/pickerX)
-									if pickerX>0:
-										pickerDrawX = (wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.cos(angle)
-										pickerDrawY = (wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.sin(angle)
-									else:
-										pickerDrawX = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.cos(angle)
-										pickerDrawY = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.sin(angle)
-							else:
-								doPicker=False
-					elif event['type'] == 'buttonDown':
-						pickerTime = getTime()-pickerStart
-						done = True
-				drawWheel(rotation=wheelRotation)
-				if doPicker:
-					drawPicker(pickerDrawX,pickerDrawY)
+			if (not blink) & (not saccade) & (not anticipation):
+				#Do color wheel here
+				wheelRotation = drawWheel()
+				pickerX,pickerY = [0,0]
+				pickerDrawX,pickerDrawY = [0,0]
 				stimDisplay.refresh()
-			colorChoice = ','.join(map(str,numpy.fromstring(gl.glReadPixels(stimDisplayRes[0]/2+pickerX,stimDisplayRes[1]/2+pickerY,1,1,gl.GL_RGB,gl.GL_UNSIGNED_BYTE),dtype=numpy.uint8)))
+				pickerStart = getTime()
+				doPicker = False
+				done = False
+				while not done:
+					#check for q key pressed
+					checkQ()
+					#check for gamepad input
+					while (not gamepadChild.qFrom.empty()) and ((getTime()-stimDisplay.lastUpdate)<.01):
+						event = gamepadChild.qFrom.get()
+						if event['type'] == 'stick':
+							if event['side']=='right':
+								pickerX,pickerY = event['value']
+								pickerY = -pickerY
+								magnitude = math.sqrt(pickerX**2+pickerY**2)
+								if magnitude>(255/3.0):
+									doPicker=True
+									if pickerX==0:
+										pickerDrawX = 0
+										if pickerY>0:
+											pickerDrawY = (wheelSize-(wheelSize-wheelSize*.9)/2.0)
+										else:
+											pickerDrawY = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)
+									elif pickerY==0:
+										pickerDrawY = 0
+										if pickerX>0:
+											pickerDrawX = (wheelSize-(wheelSize-wheelSize*.9)/2.0)
+										else:
+											pickerDrawX = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)
+									else:
+										angle = math.atan((pickerY*1.0)/pickerX)
+										if pickerX>0:
+											pickerDrawX = (wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.cos(angle)
+											pickerDrawY = (wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.sin(angle)
+										else:
+											pickerDrawX = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.cos(angle)
+											pickerDrawY = -(wheelSize-(wheelSize-wheelSize*.9)/2.0)*math.sin(angle)
+								else:
+									doPicker=False
+						elif event['type'] == 'buttonDown':
+							pickerTime = getTime()-pickerStart
+							done = True
+					drawWheel(rotation=wheelRotation)
+					if doPicker:
+						drawPicker(pickerDrawX,pickerDrawY)
+					stimDisplay.refresh()
+				colorChoice = ','.join(map(str,numpy.fromstring(gl.glReadPixels(stimDisplayRes[0]/2+pickerX,stimDisplayRes[1]/2+pickerY,1,1,gl.GL_RGB,gl.GL_UNSIGNED_BYTE),dtype=numpy.uint8)))
 			#write out trial info
 			triggerDataToWriteLeft = '\n'.join([trialDescriptor + '\tleft\t' + '\t'.join(map(str,i)) for i in triggerData['left']])
 			triggerDataToWriteRight = '\n'.join([trialDescriptor + '\tright\t' + '\t'.join(map(str,i)) for i in triggerData['right']])
 			writerChild.qTo.put(['write','trigger',triggerDataToWriteLeft])
 			writerChild.qTo.put(['write','trigger',triggerDataToWriteRight])
-			dataToWrite = '\t'.join(map(str,[ subInfoForFile , messageViewingTime , block , trialNum , cueValidity , targetSide , targetIdentity , targetColor , rt , rtLeft , rtRight , anticipation , feedbackResponse , wheelRotation , colorChoice , pickerX , pickerY , pickerTime ]))
+			dataToWrite = '\t'.join(map(str,[ subInfoForFile , messageViewingTime , block , trialNum , cueValidity , targetSide , targetIdentity , targetColor , rt , rtLeft , rtRight , anticipation , feedbackResponse , wheelRotation , colorChoice , pickerX , pickerY , pickerTime , blink , saccade , biggestSmallSaccade]))
 			writerChild.qTo.put(['write','data',dataToWrite])
 		print 'on break'
 
@@ -1013,6 +1030,9 @@ if __name__ == '__main__':
 	########
 	# Initialize the data files
 	########
+
+	if doEyelink:
+		doCalibration()
 
 	#get subject info
 	subInfo = getSubInfo()
@@ -1035,7 +1055,7 @@ if __name__ == '__main__':
 
 	writerChild.qTo.put(['newFile','data','_Data/'+filebase+'/'+filebase+'_data.txt'])
 	writerChild.qTo.put(['write','data',password])
-	header ='\t'.join(['id' , 'year' , 'month' , 'day' , 'hour' , 'minute' , 'sex' , 'age'  , 'handedness' , 'messageViewingTime' , 'block' , 'trialNum' , 'cueValidity' , 'targetSide' , 'targetIdentity' , 'targetColor' , 'rt', 'rtLeft', 'rtRight' , 'anticipation' , 'feedbackResponse' , 'wheelRotation' , 'colorChoice' , 'pickerX' , 'pickerY' , 'pickerTime'])
+	header ='\t'.join(['id' , 'year' , 'month' , 'day' , 'hour' , 'minute' , 'sex' , 'age'  , 'handedness' , 'messageViewingTime' , 'block' , 'trialNum' , 'cueValidity' , 'targetSide' , 'targetIdentity' , 'targetColor' , 'rt', 'rtLeft', 'rtRight' , 'anticipation' , 'feedbackResponse' , 'wheelRotation' , 'colorChoice' , 'pickerX' , 'pickerY' , 'pickerTime', 'blink' , 'saccade' , 'biggestSmallSaccade'])
 	writerChild.qTo.put(['write','data',header])
 
 	writerChild.qTo.put(['newFile','trigger','_Data/'+filebase+'/'+filebase+'_trigger.txt'])
