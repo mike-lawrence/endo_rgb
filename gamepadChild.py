@@ -121,7 +121,7 @@ qTo
 		now = time.time()
 		#check if there's any data from the gamepad
 		try:
-			data = dev.read(readEP.bEndpointAddress,readEP.wMaxPacketSize,1)
+			data = dev.read(readEP.bEndpointAddress,readEP.wMaxPacketSize,0)
 		except usb.core.USBError as e:
 			data = None
 			if e.args == ('Operation timed out',):
